@@ -1,5 +1,7 @@
 from ollama import chat
 
+from tools.file_tools import read_file
+
 
 MODEL = "qwen3:8b"
 
@@ -68,6 +70,11 @@ GENERAL BEHAVIOUR
 """
 
 
+AVAILABLE_TOOLS = {
+    "read_file": read_file,
+}
+
+
 def main():
     messages = [
         {
@@ -99,18 +106,47 @@ def main():
         response = chat(
             model=MODEL,
             messages=messages,
+            tools=[read_file],
         )
 
-        assistant_response = response.message.content
+        messages.append(response.message)
 
-        messages.append(
-            {
-                "role": "assistant",
-                "content": assistant_response,
-            }
-        )
+        if response.message.tool_calls:
+            for tool_call in response.message.tool_calls:
+                tool_name = tool_call.function.name
+                tool_arguments = tool_call.function.arguments
 
-        print(f"\nAgent: {assistant_response}")
+                function_to_call = AVAILABLE_TOOLS.get(tool_name)
+
+                if function_to_call is None:
+                    tool_result = f"Error: Unknown tool: {tool_name}"
+                else:
+                    print(
+                        f"\n[Tool] {tool_name}({tool_arguments})"
+                    )
+
+                    tool_result = function_to_call(**tool_arguments)
+
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_name": tool_name,
+                        "content": str(tool_result),
+                    }
+                )
+
+            final_response = chat(
+                model=MODEL,
+                messages=messages,
+                tools=[read_file],
+            )
+
+            messages.append(final_response.message)
+
+            print(f"\nAgent: {final_response.message.content}")
+
+        else:
+            print(f"\nAgent: {response.message.content}")
 
 
 if __name__ == "__main__":
