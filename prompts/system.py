@@ -181,9 +181,6 @@ Available AWS capability:
 
 Use cloud tools only for read-only inspection.
 
-Azure and Azure DevOps authentication are not currently configured.
-Do not assume Azure access is available.
-
 Do not request unrestricted administrator credentials or modify cloud
 resources, IAM, networking, security groups, or production services.
 
