@@ -49,6 +49,18 @@ Tool Layer
 Generated Markdown and text documents can be saved inside
 `workspace/` only after explicit user approval.
 
+### Local Knowledge / RAG
+
+- Local semantic search across personal notes and documentation
+- Markdown and text knowledge sources
+- Local embeddings through Ollama
+- SQLite vector index stored locally
+- Source-aware retrieval with chunk references
+- Knowledge source files ignored by Git by default
+
+The knowledge base uses `embeddinggemma:300m-qat-q4_0` for
+embeddings and stores derived index data under `workspace/`.
+
 ### Research
 
 - Public web search
@@ -167,10 +179,11 @@ Install Python dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Ensure Ollama is running and the model is installed:
+Ensure Ollama is running and the chat and embedding models are installed:
 
 ```bash
 ollama pull qwen3:8b
+ollama pull embeddinggemma:300m-qat-q4_0
 ollama list
 ```
 
@@ -210,6 +223,18 @@ Research the official Terraform validate documentation and cite the sources.
 ```
 
 ```text
+Show me the status of my local knowledge base.
+```
+
+```text
+Rebuild my knowledge index.
+```
+
+```text
+What have I documented about Kubernetes?
+```
+
+```text
 Inspect logs/deployment.log and identify evidence of the failure.
 ```
 
@@ -225,6 +250,36 @@ Separate observed evidence, likely cause, uncertainty, and remediation.
 ```text
 Create an RCA from the available evidence and save it as incident-rca.md.
 ```
+
+## Local Knowledge Setup
+
+Personal knowledge files belong under `knowledge/`.
+
+Supported formats:
+
+- `.md`
+- `.txt`
+
+Knowledge source files are ignored by Git by default so personal notes
+remain local. Only `knowledge/README.md` is tracked.
+
+After adding or changing knowledge documents, ask the agent:
+
+```text
+Rebuild my knowledge index.
+```
+
+Indexing requires explicit approval because it writes derived SQLite
+index data into `workspace/`.
+
+Once indexed, ask questions such as:
+
+```text
+Search my knowledge for Terraform troubleshooting.
+```
+
+The agent should ground its response in returned excerpts and identify
+the source paths where useful.
 
 ## Tests
 
@@ -262,7 +317,7 @@ Future additions may include:
 - Azure DevOps when authentication is available
 - broader read-only AWS/Azure inspection
 - Google Drive
-- persistent knowledge/RAG
+- PDF ingestion for the local knowledge base
 - task/calendar integrations
 - specialist agents when justified
 - local web UI
