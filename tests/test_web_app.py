@@ -1,4 +1,9 @@
 import io
+import json
+
+from werkzeug.security import (
+    generate_password_hash,
+)
 
 import web_app
 from sessions import SessionStore
@@ -8,7 +13,8 @@ def _client(
     tmp_path,
 ):
     store = SessionStore(
-        tmp_path / "sessions.sqlite3"
+        tmp_path
+        / "sessions.sqlite3"
     )
 
     app = web_app.create_app(
@@ -18,83 +24,178 @@ def _client(
         TESTING=True
     )
 
-    return app.test_client()
+    return (
+        app.test_client(),
+        store,
+    )
+
+
+def _csrf(
+    client,
+) -> str:
+    client.get("/")
+
+    with (
+        client
+        .session_transaction()
+    ) as flask_session:
+        return flask_session[
+            "_csrf_token"
+        ]
 
 
 def test_home_loads(
     tmp_path,
 ):
-    client = _client(
+    client, _ = _client(
         tmp_path
     )
 
     response = client.get("/")
 
-    assert response.status_code == 200
+    assert (
+        response.status_code
+        == 200
+    )
     assert (
         b"Personal AI Agent"
         in response.data
     )
 
 
-def test_chat_persists_response(
+def test_chat_stream_persists_response(
     monkeypatch,
     tmp_path,
 ):
-    store = SessionStore(
-        tmp_path / "sessions.sqlite3"
+    client, store = _client(
+        tmp_path
     )
-    session = store.create_session()
+    selected = (
+        store.create_session()
+    )
+
+    def fake_stream(
+        **_kwargs,
+    ):
+        yield {
+            "type": "meta",
+            "route": "simple_chat",
+            "route_reason": "test",
+        }
+        yield {
+            "type": "token",
+            "content": "Test ",
+        }
+        yield {
+            "type": "token",
+            "content": "response",
+        }
+        yield {
+            "type": "done",
+            "route": "simple_chat",
+            "tool_calls": 0,
+            "first_token_ms": 10.0,
+            "model_ms": 20.0,
+            "total_ms": 25.0,
+        }
 
     monkeypatch.setattr(
         web_app,
-        "run_agent_turn",
-        lambda *args, **kwargs: "Test response",
+        "stream_agent_turn",
+        fake_stream,
     )
 
-    app = web_app.create_app(
-        store=store
+    token = _csrf(
+        client
     )
-    app.config.update(
-        TESTING=True
-    )
-
-    client = app.test_client()
 
     response = client.post(
-        "/api/chat",
+        "/api/chat/stream",
         json={
-            "session_id": session.id,
+            "session_id": (
+                selected.id
+            ),
             "prompt": "Hello",
             "approve_writes": False,
         },
+        headers={
+            "X-CSRF-Token": token,
+        },
     )
 
-    assert response.status_code == 200
     assert (
-        response.get_json()["response"]
-        == "Test response"
+        response.status_code
+        == 200
     )
 
-    assert store.load_messages(
-        session.id
-    ) == [
-        {
-            "role": "user",
-            "content": "Hello",
-        },
-        {
-            "role": "assistant",
-            "content": "Test response",
-        },
+    events = [
+        json.loads(line)
+        for line in (
+            response
+            .get_data(
+                as_text=True
+            )
+            .splitlines()
+        )
+        if line
     ]
+
+    assert any(
+        event.get("type")
+        == "done"
+        for event in events
+    )
+
+    assert (
+        store.load_messages(
+            selected.id
+        )
+        == [
+            {
+                "role": "user",
+                "content": "Hello",
+            },
+            {
+                "role": "assistant",
+                "content": (
+                    "Test response"
+                ),
+            },
+        ]
+    )
+
+
+def test_post_requires_csrf(
+    tmp_path,
+):
+    client, _ = _client(
+        tmp_path
+    )
+
+    response = client.post(
+        "/api/sessions"
+    )
+
+    assert (
+        response.status_code
+        == 400
+    )
+    assert (
+        "CSRF"
+        in response.get_json()[
+            "error"
+        ]
+    )
 
 
 def test_upload_rejects_unsupported_extension(
     tmp_path,
 ):
-    client = _client(
+    client, _ = _client(
         tmp_path
+    )
+    token = _csrf(
+        client
     )
 
     response = client.post(
@@ -105,13 +206,23 @@ def test_upload_rejects_unsupported_extension(
                 "payload.exe",
             )
         },
-        content_type="multipart/form-data",
+        content_type=(
+            "multipart/form-data"
+        ),
+        headers={
+            "X-CSRF-Token": token,
+        },
     )
 
-    assert response.status_code == 400
+    assert (
+        response.status_code
+        == 400
+    )
     assert (
         "Unsupported"
-        in response.get_json()["error"]
+        in response.get_json()[
+            "error"
+        ]
     )
 
 
@@ -119,7 +230,10 @@ def test_upload_saves_supported_file_without_overwrite(
     monkeypatch,
     tmp_path,
 ):
-    root = tmp_path / "knowledge"
+    root = (
+        tmp_path
+        / "knowledge"
+    )
 
     monkeypatch.setattr(
         web_app,
@@ -132,44 +246,72 @@ def test_upload_saves_supported_file_without_overwrite(
         lambda: "status",
     )
 
-    client = _client(
+    client, _ = _client(
         tmp_path
+    )
+    token = _csrf(
+        client
     )
 
     first = client.post(
         "/api/knowledge/upload",
         data={
             "file": (
-                io.BytesIO(b"hello"),
+                io.BytesIO(
+                    b"hello"
+                ),
                 "notes.txt",
             )
         },
-        content_type="multipart/form-data",
+        content_type=(
+            "multipart/form-data"
+        ),
+        headers={
+            "X-CSRF-Token": token,
+        },
     )
 
     second = client.post(
         "/api/knowledge/upload",
         data={
             "file": (
-                io.BytesIO(b"again"),
+                io.BytesIO(
+                    b"again"
+                ),
                 "notes.txt",
             )
         },
-        content_type="multipart/form-data",
+        content_type=(
+            "multipart/form-data"
+        ),
+        headers={
+            "X-CSRF-Token": token,
+        },
     )
 
-    assert first.status_code == 201
-    assert second.status_code == 409
     assert (
-        root / "inbox" / "notes.txt"
+        first.status_code
+        == 201
+    )
+    assert (
+        second.status_code
+        == 409
+    )
+    assert (
+        root
+        / "inbox"
+        / "notes.txt"
     ).read_bytes() == b"hello"
 
 
 def test_reindex_requires_explicit_confirmation(
     tmp_path,
 ):
-    client = _client(
+    client, _ = _client(
         tmp_path
+    )
+    token = _csrf(
+        client
     )
 
     response = client.post(
@@ -177,10 +319,105 @@ def test_reindex_requires_explicit_confirmation(
         json={
             "confirm": False,
         },
+        headers={
+            "X-CSRF-Token": token,
+        },
     )
 
-    assert response.status_code == 400
+    assert (
+        response.status_code
+        == 400
+    )
     assert (
         "Explicit confirmation"
-        in response.get_json()["error"]
+        in response.get_json()[
+            "error"
+        ]
+    )
+
+
+def test_authentication_can_protect_home(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setattr(
+        web_app,
+        "WEB_REQUIRE_AUTH",
+        True,
+    )
+    monkeypatch.setattr(
+        web_app,
+        "WEB_PASSWORD_HASH",
+        generate_password_hash(
+            "test-password"
+        ),
+    )
+    monkeypatch.setattr(
+        web_app,
+        "WEB_SECRET_KEY",
+        "test-secret",
+    )
+
+    store = SessionStore(
+        tmp_path
+        / "sessions.sqlite3"
+    )
+    app = web_app.create_app(
+        store=store
+    )
+    app.config.update(
+        TESTING=True
+    )
+
+    client = app.test_client()
+
+    protected = client.get(
+        "/"
+    )
+
+    assert (
+        protected.status_code
+        == 302
+    )
+    assert (
+        "/login"
+        in protected.headers[
+            "Location"
+        ]
+    )
+
+    client.get(
+        "/login"
+    )
+
+    with (
+        client
+        .session_transaction()
+    ) as flask_session:
+        token = flask_session[
+            "_csrf_token"
+        ]
+
+    logged_in = client.post(
+        "/login",
+        data={
+            "password": (
+                "test-password"
+            ),
+            "csrf_token": token,
+        },
+    )
+
+    assert (
+        logged_in.status_code
+        == 302
+    )
+
+    home = client.get(
+        "/"
+    )
+
+    assert (
+        home.status_code
+        == 200
     )

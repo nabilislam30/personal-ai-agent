@@ -1,5 +1,51 @@
 # Changelog
 
+## 2.1.0
+
+Performance and private-production-readiness release.
+
+### Performance
+
+- Added deterministic request routing before model execution
+- Simple conversational requests receive no tool schemas
+- Domain requests receive only relevant tool groups
+- Latest failed GitHub Actions investigations use a deterministic evidence path
+- Local knowledge questions can retrieve evidence directly before generation
+- Simple/general responses use Ollama streaming
+- Simple no-tool responses request non-thinking mode for lower latency
+- Ollama model keep-alive is configurable
+- Optional model preloading keeps Qwen resident after startup
+- Reduced recent-message context windows
+- Added deterministic local compaction of older conversation history
+- Added first-token/model/total latency reporting
+- Added structured performance logging without prompt contents
+
+### Private production readiness
+
+- Added single-user password authentication
+- Added CSRF protection
+- Added login/chat rate limiting
+- Added strict security response headers
+- Added production configuration validation
+- Added /health and /ready endpoints
+- Added Gunicorn production serving
+- Added Docker deployment support
+- Added localhost-first deployment defaults
+- Added Tailscale Serve private HTTPS deployment documentation
+- Added local backup and guarded restore tooling
+- Added automatic pre-restore safety backups
+- Added authentication/configuration helper script
+
+### Testing
+
+- Added router tests
+- Added fast-path guardrail tests
+- Added security configuration tests
+- Added conversation compaction tests
+- Added streaming web tests
+- Added authentication tests
+- Added backup/archive safety tests
+
 ## 2.0.0
 
 Core V2 feature release.

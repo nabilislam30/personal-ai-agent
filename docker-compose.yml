@@ -1,0 +1,41 @@
+services:
+  personal-ai-agent:
+    build:
+      context: .
+    container_name: personal-ai-agent
+    restart: unless-stopped
+
+    env_file:
+      - .env.production
+
+    environment:
+      OLLAMA_HOST: http://host.docker.internal:11434
+      PAI_ENV: production
+      PAI_REQUIRE_AUTH: "true"
+      PAI_WEB_HOST: 0.0.0.0
+      PAI_GUNICORN_BIND: 0.0.0.0:8000
+      PAI_WORKSPACE_ROOT: /data/workspace
+      PAI_KNOWLEDGE_ROOT: /data/knowledge
+
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    volumes:
+      - ./workspace:/data/workspace
+      - ./knowledge:/data/knowledge
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

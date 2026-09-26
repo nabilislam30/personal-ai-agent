@@ -1,44 +1,175 @@
 # Personal AI Agent
 
-A local-first Python AI agent powered by Ollama.
+A local-first, single-user Python AI agent powered by Ollama.
 
-Version: **2.0.0**
+Current version: **2.1.0**
 
-V2 builds on the stable v1 agent with document ingestion, deeper
-read-only AWS inspection, and a local browser interface.
+The project combines fast conversational chat, persistent local sessions,
+RAG over personal documents, read-only DevOps investigation, controlled
+document writing, and a private browser interface.
 
-## Architecture
+## What changed in 2.1
+
+The agent now has a performance layer before the model:
 
 ```text
-CLI (main.py)          Local Web UI (web_app.py)
-       \                    /
-        \                  /
-         v                v
-            agent.py
-         orchestration
-              |
-        Ollama / Qwen3
-              |
-   +----------+-----------+
-   |          |           |
-Local RAG   DevOps      General
-   |          |           |
-PDF/DOCX    Git         Research
-MD/TXT      Terraform   Documentation
-SQLite      GitHub      Planning
-Embeddings  AWS
-              |
-      Permission Layer
-READ -> automatic
-WRITE -> explicit approval
-DESTRUCTIVE -> unavailable
+User request
+    |
+    v
+Deterministic router
+    |
+    +--> Simple chat --------> no tools + short prompt + streaming
+    |
+    +--> Knowledge ----------> local RAG evidence
+    |
+    +--> GitHub Actions -----> pipeline tools only
+    |
+    +--> AWS ----------------> AWS read-only tools only
+    |
+    +--> Terraform ----------> Terraform/file/Git tools only
+    |
+    +--> Research -----------> web tools only
+    |
+    +--> Documentation ------> documentation/write tools only
 ```
 
-## V2 Features
+Simple questions such as:
 
-### Local Web UI
+```text
+What is your name?
+```
 
-Start the browser interface:
+no longer receive the schemas for Git, Terraform, GitHub Actions, AWS,
+RAG, research, and document-writing tools.
+
+For no-tool responses, the application also requests non-thinking mode
+from Ollama and streams tokens to the browser as they are generated.
+
+## Performance controls
+
+Default performance settings:
+
+```text
+PAI_OLLAMA_KEEP_ALIVE=30m
+PAI_PRELOAD_MODEL=true
+PAI_SIMPLE_CHAT_HISTORY_LIMIT=12
+PAI_TOOL_HISTORY_LIMIT=24
+PAI_SESSION_SUMMARY_MAX_CHARS=6000
+```
+
+Older conversation turns remain stored in SQLite. The model receives a
+bounded recent window plus a deterministic compact summary of older
+conversation content instead of the full raw history.
+
+The browser displays measurements such as:
+
+```text
+Route: simple_chat · first token: 620 ms · total: 1.84 s
+```
+
+Structured logs also record route/tool/timing metadata without storing
+prompt contents.
+
+## Core capabilities
+
+### Local models
+
+- Qwen3 8B through Ollama for chat
+- EmbeddingGemma through Ollama for RAG
+- configurable model keep-alive
+- optional startup preload
+
+### Persistent conversation memory
+
+Conversations are stored locally in:
+
+```text
+workspace/sessions.sqlite3
+```
+
+CLI commands:
+
+```text
+/new
+/sessions
+/use <id>
+/help
+exit
+```
+
+### Local RAG
+
+Supported formats:
+
+- `.md`
+- `.txt`
+- `.pdf`
+- `.docx`
+
+Source documents live under `knowledge/`.
+
+The derived vector index lives under `workspace/` and can be rebuilt at
+any time.
+
+PDF extraction is text-only. Image-only/scanned PDFs require a future OCR
+extension.
+
+### DevOps inspection
+
+Read-only capabilities include:
+
+- Git status/diff/log
+- Terraform version/fmt/validate/show
+- log tail inspection
+- GitHub Actions runs/details/failed logs
+- deterministic latest-failed-run evidence gathering
+- AWS identity/region
+- EC2 inventory
+- ECS clusters/services
+- EKS clusters
+- CloudWatch alarms
+- Route 53 hosted zones
+- S3 bucket inventory
+
+The agent does not expose destructive infrastructure operations.
+
+### Documentation and research
+
+The agent can:
+
+- draft technical documentation
+- create README/project/incident/RCA/Jira material
+- search the public web
+- inspect public webpages
+- save approved Markdown/text output under `workspace/`
+
+## Permission model
+
+```text
+READ
+  automatic
+
+WRITE
+  explicit human approval
+
+DESTRUCTIVE
+  unavailable
+```
+
+Examples intentionally unavailable to the model include:
+
+- `terraform apply`
+- `terraform destroy`
+- `kubectl delete`
+- Git push/reset
+- AWS resource mutation/deletion
+- IAM changes
+- arbitrary shell execution
+- workflow rerun/cancellation
+
+## Local web UI
+
+Development/local use:
 
 ```bash
 python web_app.py
@@ -50,195 +181,72 @@ Open:
 http://127.0.0.1:8000
 ```
 
-The server binds to localhost by default.
+The browser UI supports:
 
-The web UI supports:
+- streamed simple responses
+- persistent sessions
+- session switching
+- local knowledge uploads
+- knowledge-index rebuild
+- per-message explicit write approval
+- performance timing display
 
-- persistent conversation sessions
-- creating and switching sessions
-- local chat through Qwen3/Ollama
-- per-message approval for agent write tools
-- knowledge document uploads
-- knowledge-index rebuilds
-- knowledge-index status
+## Production security
 
-The **Approve write tools for this message** checkbox is intentionally
-off by default. It provides explicit approval only for the current
-message.
+Private production deployment adds:
 
-### PDF and DOCX Knowledge Ingestion
+- password authentication
+- CSRF protection
+- strict SameSite/HttpOnly cookies
+- optional Secure cookies
+- login/chat rate limits
+- security headers
+- request-size limits
+- production configuration validation
+- `/health`
+- `/ready`
+- Gunicorn
+- JSON operational logs
+- backup/restore tooling
 
-Supported local knowledge formats:
+Production mode refuses to start through `wsgi.py` if authentication is
+disabled or required secrets are missing.
 
-- `.md`
-- `.txt`
-- `.pdf`
-- `.docx`
+## Recommended live architecture
 
-PDF ingestion extracts embedded text. Scanned/image-only PDFs are not
-OCR'd automatically.
-
-DOCX ingestion extracts paragraphs and table contents.
-
-Documents can be copied directly into `knowledge/` or uploaded through
-the local web UI. Web uploads are stored under `knowledge/inbox/`.
-
-Knowledge files are ignored by Git by default.
-
-### Knowledge Index State Detection
-
-The local RAG system records a fingerprint of the source-document state.
-
-If files change after indexing:
-
-- `knowledge_status` reports that sources changed
-- semantic search warns that the index may be stale
-- rebuilding the index refreshes the embeddings
-
-### Deeper Read-Only AWS Inspection
-
-Available AWS tools:
-
-- caller identity
-- configured region
-- EC2 instance inventory
-- ECS cluster listing
-- ECS service listing
-- EKS cluster listing
-- CloudWatch alarm inspection
-- Route 53 hosted-zone inspection
-- S3 bucket inventory
-
-These tools use fixed AWS CLI read operations. The agent cannot create,
-modify, scale, restart, deploy, or delete AWS resources.
-
-## Existing Core Capabilities
-
-### Persistent Conversation Memory
-
-Conversations are stored locally in SQLite under `workspace/`.
-
-CLI commands:
+The recommended deployment is private and single-user:
 
 ```text
-/new          Start a new conversation
-/sessions     List saved conversations
-/use <id>     Switch to a saved conversation
-/help         Show commands
-exit          Quit
+Authorised devices
+       |
+       | private Tailscale tailnet
+       v
+Tailscale Serve / HTTPS
+       |
+       v
+127.0.0.1:8000 on Mac mini
+       |
+       v
+Gunicorn
+       |
+       v
+Personal AI Agent
+       |
+       +--> Ollama/Qwen on Mac
+       +--> local knowledge
+       +--> local sessions
+       +--> read-only integrations
 ```
 
-Only user and assistant messages are persisted. Old tool traces are not
-replayed after restarting the application.
+This avoids opening the agent or Ollama directly to the public internet.
 
-### Documentation
+See:
 
-The agent can draft:
+```text
+DEPLOYMENT.md
+```
 
-- README files
-- project documentation
-- Jira updates
-- incident reports
-- RCAs
-- architecture documentation
-- troubleshooting documentation
-- technical summaries
-
-Generated `.md` and `.txt` files can be saved only under
-`workspace/`, require explicit approval, and cannot overwrite existing
-files automatically.
-
-### Research
-
-- public web search
-- public webpage extraction
-- source URLs in research results
-- preference for primary technical documentation
-
-### Git
-
-Read-only inspection:
-
-- `git status`
-- `git diff`
-- staged diffs
-- recent commit history
-
-### Terraform
-
-Read-only inspection:
-
-- Terraform version
-- formatting checks
-- `terraform validate`
-- existing plan/state inspection
-
-There is no `terraform apply` or `terraform destroy` capability.
-
-### GitHub Actions
-
-Read-only pipeline investigation:
-
-- GitHub CLI authentication
-- workflow run listing
-- workflow-run details
-- failed-step logs
-- deterministic latest-failed-run analysis
-
-## Security Model
-
-### READ
-
-May run automatically:
-
-- local file inspection
-- local knowledge search
-- Git inspection
-- Terraform validation
-- GitHub Actions investigation
-- AWS inspection
-- web research
-- log inspection
-
-### WRITE
-
-Requires explicit human approval:
-
-- saving generated documents
-- rebuilding the knowledge index
-
-Direct web UI actions such as uploading a knowledge file or pressing
-**Rebuild index** are themselves explicit user actions.
-
-### DESTRUCTIVE
-
-Not exposed:
-
-- `terraform apply`
-- `terraform destroy`
-- `kubectl delete`
-- Git push/reset
-- AWS resource mutation/deletion
-- IAM changes
-- service restarts
-- workflow reruns/cancellation
-
-## Requirements
-
-Required:
-
-- macOS or Linux
-- Python 3.13+
-- Ollama
-- Git
-- `qwen3:8b`
-- `embeddinggemma:300m-qat-q4_0`
-
-Optional depending on the feature:
-
-- GitHub CLI (`gh`)
-- Terraform CLI
-- AWS CLI
+for the production procedure.
 
 ## Setup
 
@@ -255,32 +263,22 @@ Install dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Install development/test dependencies:
+Install development dependencies:
 
 ```bash
 python -m pip install -r requirements-dev.txt
 ```
 
-Pull local models:
+Install models:
 
 ```bash
 ollama pull qwen3:8b
 ollama pull embeddinggemma:300m-qat-q4_0
 ```
 
-For GitHub Actions investigation:
-
-```bash
-gh auth login
-gh auth status
-```
-
-For AWS inspection, use your existing AWS CLI authentication and
-least-privilege credentials.
-
 ## Run
 
-Terminal:
+CLI:
 
 ```bash
 python main.py
@@ -292,64 +290,106 @@ Web:
 python web_app.py
 ```
 
-## Configuration
+## Production authentication setup
 
-Configuration is centralised in `config.py`.
+Generate a password hash and Flask secret:
 
-Environment overrides are documented in `.env.example`, including:
+```bash
+python scripts/generate_auth.py
+```
 
-- chat and embedding models
-- knowledge chunking limits
-- maximum knowledge file size
-- web host/port
-- maximum web upload size
+Then follow `DEPLOYMENT.md`.
 
-The default web host is `127.0.0.1`.
+Real production secrets belong in:
+
+```text
+.env.production
+```
+
+which is ignored by Git.
+
+## Backups
+
+Create:
+
+```bash
+python scripts/backup.py
+```
+
+Restore:
+
+```bash
+python scripts/restore.py backups/<archive>.tar.gz --confirm
+```
+
+Backups preserve personal knowledge and conversation sessions. The vector
+index is derived data and is rebuilt after restore.
 
 ## Tests
 
-Run unit tests:
+Automated tests:
 
 ```bash
 python -m pytest -q
 ```
 
-Run the manual general smoke suite:
+Manual local smoke tests:
 
 ```bash
 PYTHONPATH=. python tests/smoke_tests.py
 ```
 
-Run the GitHub Actions smoke suite:
+GitHub Actions smoke test:
 
 ```bash
 PYTHONPATH=. python tests/pipeline_smoke_tests.py
 ```
 
-## CI
+## Docker
 
-GitHub Actions validates:
+Docker deployment support is included for portability:
 
-- dependency installation
-- dependency consistency
-- Python compilation
-- automated pytest tests
+```bash
+docker compose build
+docker compose up -d
+```
 
-A manual `force_failure=true` input remains available for controlled
-pipeline-failure investigation testing.
+On the Mac mini, direct Gunicorn is preferred when it avoids widening the
+Ollama listening interface and preserves native local acceleration.
 
-## Release
+## Project structure
 
-Current version: **2.0.0**
+```text
+personal-ai-agent/
+├── main.py
+├── web_app.py
+├── wsgi.py
+├── agent.py
+├── router.py
+├── config.py
+├── security.py
+├── observability.py
+├── permissions.py
+├── sessions.py
+├── gunicorn.conf.py
+├── Dockerfile
+├── docker-compose.yml
+├── DEPLOYMENT.md
+├── CHANGELOG.md
+├── VERSION
+├── prompts/
+├── tools/
+├── scripts/
+├── tests/
+├── knowledge/
+└── workspace/     # local, ignored by Git
+```
 
-See `CHANGELOG.md` for release contents.
+## Current deployment boundary
 
-## Later Expansion
+The production design is intentionally **private and single-user**.
 
-Potential future additions:
-
-- Google Drive
-- task/calendar integration
-- OCR for scanned PDFs
-- richer AWS service-specific investigations
-- specialist internal workflows where they materially improve reliability
+Turning this into a public multi-user service would require a separate
+identity/authorisation model, per-user data isolation, tenant-aware RAG,
+audit controls, abuse protection, and different cloud/security
+architecture.
