@@ -173,6 +173,18 @@
       font-size: 12px;
     }
 
+    .account {
+      margin-top: auto;
+    }
+
+    .account form {
+      margin: 0;
+    }
+
+    .account button {
+      width: 100%;
+    }
+
     main {
       min-width: 0;
       display: grid;
@@ -290,6 +302,7 @@
       min-height: 18px;
       color: var(--muted);
       font-size: 12px;
+      white-space: pre-wrap;
     }
 
     .notice.error {
@@ -326,7 +339,7 @@
     <aside>
       <div class="brand">
         <h1>Personal AI Agent</h1>
-        <p>Local-first V2 workspace</p>
+        <p>Private local-first workspace</p>
       </div>
 
       <section>
@@ -378,14 +391,34 @@
           ></div>
         </div>
       </section>
+
+      {% if auth_enabled %}
+      <section class="account">
+        <form
+          action="/logout"
+          method="post"
+        >
+          <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token }}"
+          >
+          <button
+            class="secondary-button"
+            type="submit"
+          >Sign out</button>
+        </form>
+      </section>
+      {% endif %}
     </aside>
 
     <main>
       <header>
-        <div>
-          <div class="header-title" id="activeTitle">
-            New session
-          </div>
+        <div
+          class="header-title"
+          id="activeTitle"
+        >
+          New session
         </div>
         <div class="model-pill">
           {{ model }}
@@ -393,10 +426,10 @@
       </header>
 
       <div id="messages">
-        <div class="empty" id="emptyState">
-          Ask about your projects, local knowledge,
-          GitHub Actions, Terraform, AWS, documentation,
-          research, or general work.
+        <div class="empty">
+          Ask a simple question for the fast path,
+          or ask about your knowledge, GitHub Actions,
+          Terraform, AWS, files, documentation, or research.
         </div>
       </div>
 
@@ -404,7 +437,7 @@
         <div class="composer">
           <textarea
             id="prompt"
-            placeholder="Message your local agent…"
+            placeholder="Message your agent…"
           ></textarea>
 
           <div class="composer-actions">
@@ -423,6 +456,7 @@
             >Send</button>
           </div>
         </div>
+
         <div
           class="notice"
           id="chatNotice"
@@ -432,6 +466,9 @@
   </div>
 
   <script>
+    const csrfToken =
+      {{ csrf_token|tojson }};
+
     const state = {
       activeSessionId: null,
       sessions: [],
@@ -442,8 +479,6 @@
       document.getElementById("sessions");
     const messagesEl =
       document.getElementById("messages");
-    const emptyState =
-      document.getElementById("emptyState");
     const activeTitle =
       document.getElementById("activeTitle");
     const promptEl =
@@ -468,7 +503,8 @@
     ) {
       element.textContent = message;
       element.className =
-        "notice" + (type ? " " + type : "");
+        "notice" +
+        (type ? " " + type : "");
     }
 
     function renderSessions() {
@@ -482,41 +518,60 @@
         button.className =
           "session" +
           (
-            session.id === state.activeSessionId
+            session.id ===
+            state.activeSessionId
               ? " active"
               : ""
           );
 
         const title =
           document.createElement("div");
-        title.className = "session-title";
-        title.textContent = session.title;
+        title.className =
+          "session-title";
+        title.textContent =
+          session.title;
 
         const id =
           document.createElement("div");
-        id.className = "session-id";
-        id.textContent = session.short_id;
+        id.className =
+          "session-id";
+        id.textContent =
+          session.short_id;
 
-        button.append(title, id);
-        button.addEventListener(
-          "click",
-          () => loadSession(session.id)
+        button.append(
+          title,
+          id
         );
 
-        sessionsEl.appendChild(button);
+        button.addEventListener(
+          "click",
+          () => loadSession(
+            session.id
+          )
+        );
+
+        sessionsEl.appendChild(
+          button
+        );
       }
     }
 
-    function renderMessages(messages) {
+    function renderMessages(
+      messages
+    ) {
       messagesEl.innerHTML = "";
 
       if (!messages.length) {
         const empty =
           document.createElement("div");
+
         empty.className = "empty";
         empty.textContent =
           "Start a conversation with your local agent.";
-        messagesEl.appendChild(empty);
+
+        messagesEl.appendChild(
+          empty
+        );
         return;
       }
 
@@ -535,33 +590,65 @@
       role,
       content
     ) {
-      const bubble =
-        document.createElement("div");
-
-      bubble.className =
-        "message " + role;
-      bubble.textContent = content;
-
       const existingEmpty =
-        messagesEl.querySelector(".empty");
+        messagesEl.querySelector(
+          ".empty"
+        );
 
       if (existingEmpty) {
         existingEmpty.remove();
       }
 
-      messagesEl.appendChild(bubble);
+      const bubble =
+        document.createElement(
+          "div"
+        );
+
+      bubble.className =
+        "message " + role;
+      bubble.textContent =
+        content;
+
+      messagesEl.appendChild(
+        bubble
+      );
+
       messagesEl.scrollTop =
         messagesEl.scrollHeight;
+
+      return bubble;
+    }
+
+    async function parseJson(
+      response
+    ) {
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+          "Request failed."
+        );
+      }
+
+      return data;
     }
 
     async function bootstrap() {
       const response =
-        await fetch("/api/bootstrap");
+        await fetch(
+          "/api/bootstrap"
+        );
+
       const data =
-        await response.json();
+        await parseJson(
+          response
+        );
 
       state.activeSessionId =
         data.active_session.id;
+
       state.sessions =
         data.sessions;
 
@@ -572,47 +659,58 @@
         data.knowledge_status;
 
       renderSessions();
-      renderMessages(data.messages);
+      renderMessages(
+        data.messages
+      );
     }
 
     async function refreshSessions() {
       const response =
-        await fetch("/api/bootstrap");
+        await fetch(
+          "/api/bootstrap"
+        );
+
       const data =
-        await response.json();
+        await parseJson(
+          response
+        );
 
       state.sessions =
         data.sessions;
+
       renderSessions();
     }
 
-    async function loadSession(sessionId) {
+    async function loadSession(
+      sessionId
+    ) {
       const response =
         await fetch(
           "/api/sessions/" +
-          encodeURIComponent(sessionId)
+          encodeURIComponent(
+            sessionId
+          )
         );
 
       const data =
-        await response.json();
-
-      if (!response.ok) {
-        setNotice(
-          chatNotice,
-          data.error || "Could not load session.",
-          "error"
+        await parseJson(
+          response
         );
-        return;
-      }
 
       state.activeSessionId =
         data.session.id;
+
       activeTitle.textContent =
         data.session.title;
 
       renderSessions();
-      renderMessages(data.messages);
-      setNotice(chatNotice, "");
+      renderMessages(
+        data.messages
+      );
+      setNotice(
+        chatNotice,
+        ""
+      );
     }
 
     async function createSession() {
@@ -621,14 +719,21 @@
           "/api/sessions",
           {
             method: "POST",
+            headers: {
+              "X-CSRF-Token":
+                csrfToken,
+            },
           }
         );
 
       const data =
-        await response.json();
+        await parseJson(
+          response
+        );
 
       state.activeSessionId =
         data.session.id;
+
       state.sessions.unshift(
         data.session
       );
@@ -641,19 +746,74 @@
       promptEl.focus();
     }
 
+    function performanceText(
+      event,
+      routeName
+    ) {
+      const pieces = [
+        "Route: " + routeName,
+      ];
+
+      if (
+        event.first_token_ms
+        !== null
+        && event.first_token_ms
+        !== undefined
+      ) {
+        pieces.push(
+          "first token: " +
+          Math.round(
+            event.first_token_ms
+          ) +
+          " ms"
+        );
+      }
+
+      if (
+        event.total_ms
+        !== null
+        && event.total_ms
+        !== undefined
+      ) {
+        pieces.push(
+          "total: " +
+          (
+            event.total_ms
+            / 1000
+          ).toFixed(2) +
+          " s"
+        );
+      }
+
+      if (event.tool_calls) {
+        pieces.push(
+          "tools: " +
+          event.tool_calls
+        );
+      }
+
+      return pieces.join(
+        " · "
+      );
+    }
+
     async function sendMessage() {
       const prompt =
         promptEl.value.trim();
 
-      if (!prompt || state.sending) {
+      if (
+        !prompt
+        || state.sending
+      ) {
         return;
       }
 
       state.sending = true;
       sendButton.disabled = true;
+
       setNotice(
         chatNotice,
-        "Agent is working…"
+        "Routing request…"
       );
 
       appendMessage(
@@ -661,17 +821,28 @@
         prompt
       );
 
+      const assistantBubble =
+        appendMessage(
+          "assistant",
+          ""
+        );
+
       promptEl.value = "";
+
+      let routeName =
+        "unknown";
 
       try {
         const response =
           await fetch(
-            "/api/chat",
+            "/api/chat/stream",
             {
               method: "POST",
               headers: {
                 "Content-Type":
                   "application/json",
+                "X-CSRF-Token":
+                  csrfToken,
               },
               body: JSON.stringify(
                 {
@@ -685,36 +856,133 @@
             }
           );
 
-        const data =
-          await response.json();
-
         if (!response.ok) {
+          const data =
+            await response.json();
+
           throw new Error(
             data.error ||
             "Agent request failed."
           );
         }
 
-        state.activeSessionId =
-          data.session.id;
-        activeTitle.textContent =
-          data.session.title;
+        const reader =
+          response.body.getReader();
 
-        appendMessage(
-          "assistant",
-          data.response
-        );
+        const decoder =
+          new TextDecoder();
 
-        approveWrites.checked = false;
+        let buffer = "";
+
+        while (true) {
+          const {
+            value,
+            done,
+          } = await reader.read();
+
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(
+            value,
+            {
+              stream: true,
+            }
+          );
+
+          const lines =
+            buffer.split("\n");
+
+          buffer =
+            lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.trim()) {
+              continue;
+            }
+
+            const event =
+              JSON.parse(line);
+
+            if (
+              event.type ===
+              "meta"
+            ) {
+              routeName =
+                event.route;
+
+              setNotice(
+                chatNotice,
+                "Route: " +
+                routeName +
+                " · generating…"
+              );
+            }
+
+            if (
+              event.type ===
+              "token"
+            ) {
+              assistantBubble
+                .textContent +=
+                event.content;
+
+              messagesEl.scrollTop =
+                messagesEl.scrollHeight;
+            }
+
+            if (
+              event.type ===
+              "done"
+            ) {
+              setNotice(
+                chatNotice,
+                performanceText(
+                  event,
+                  routeName
+                ),
+                "good"
+              );
+            }
+
+            if (
+              event.type ===
+              "error"
+            ) {
+              throw new Error(
+                event.error ||
+                "Agent stream failed."
+              );
+            }
+          }
+        }
+
+        approveWrites.checked =
+          false;
 
         await refreshSessions();
 
-        setNotice(
-          chatNotice,
-          "Ready",
-          "good"
-        );
+        const active =
+          state.sessions.find(
+            (item) =>
+              item.id ===
+              state.activeSessionId
+          );
+
+        if (active) {
+          activeTitle.textContent =
+            active.title;
+        }
+
       } catch (error) {
+        if (
+          !assistantBubble
+          .textContent
+        ) {
+          assistantBubble.remove();
+        }
+
         setNotice(
           chatNotice,
           error.message,
@@ -722,7 +990,8 @@
         );
       } finally {
         state.sending = false;
-        sendButton.disabled = false;
+        sendButton.disabled =
+          false;
         promptEl.focus();
       }
     }
@@ -742,7 +1011,11 @@
 
       const form =
         new FormData();
-      form.append("file", file);
+
+      form.append(
+        "file",
+        file
+      );
 
       setNotice(
         knowledgeNotice,
@@ -755,29 +1028,31 @@
             "/api/knowledge/upload",
             {
               method: "POST",
+              headers: {
+                "X-CSRF-Token":
+                  csrfToken,
+              },
               body: form,
             }
           );
 
         const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.error ||
-            "Upload failed."
+          await parseJson(
+            response
           );
-        }
 
         knowledgeStatus.textContent =
           data.status;
-        knowledgeFile.value = "";
+
+        knowledgeFile.value =
+          "";
 
         setNotice(
           knowledgeNotice,
           data.message,
           "good"
         );
+
       } catch (error) {
         setNotice(
           knowledgeNotice,
@@ -811,6 +1086,8 @@
               headers: {
                 "Content-Type":
                   "application/json",
+                "X-CSRF-Token":
+                  csrfToken,
               },
               body: JSON.stringify(
                 {
@@ -821,14 +1098,9 @@
           );
 
         const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.error ||
-            "Index rebuild failed."
+          await parseJson(
+            response
           );
-        }
 
         knowledgeStatus.textContent =
           data.status;
@@ -838,6 +1110,7 @@
           data.result,
           "good"
         );
+
       } catch (error) {
         setNotice(
           knowledgeNotice,
@@ -853,7 +1126,18 @@
       )
       .addEventListener(
         "click",
-        createSession
+        () => {
+          createSession()
+            .catch(
+              (error) => {
+                setNotice(
+                  chatNotice,
+                  error.message,
+                  "error"
+                );
+              }
+            );
+        }
       );
 
     document
@@ -883,7 +1167,8 @@
       "keydown",
       (event) => {
         if (
-          event.key === "Enter"
+          event.key ===
+          "Enter"
           && !event.shiftKey
         ) {
           event.preventDefault();

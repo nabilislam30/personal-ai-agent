@@ -6,6 +6,7 @@ on:
       - main
       - v1-finalization
       - v2-core
+      - v2-performance
 
   pull_request:
     branches:
@@ -43,7 +44,22 @@ jobs:
         run: python -m pip check
 
       - name: Compile Python source
-        run: python -m compileall main.py web_app.py agent.py config.py permissions.py sessions.py tools prompts tests
+        run: >
+          python -m compileall
+          main.py
+          web_app.py
+          wsgi.py
+          agent.py
+          router.py
+          config.py
+          security.py
+          observability.py
+          permissions.py
+          sessions.py
+          tools
+          prompts
+          scripts
+          tests
 
       - name: Run unit tests
         run: python -m pytest -q
