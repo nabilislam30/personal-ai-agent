@@ -1,6 +1,7 @@
 from ollama import chat
 
 from prompts.documentation import DOCUMENTATION_PROMPT
+from tools.document_tools import save_document
 from tools.file_tools import (
     list_directory,
     read_file,
@@ -9,6 +10,7 @@ from tools.file_tools import (
 
 
 MODEL = "qwen3:8b"
+
 
 SYSTEM_PROMPT = """
 You are a personal AI assistant designed to support multiple areas of work.
@@ -63,7 +65,6 @@ CONTENT CREATION
 - Adapt tone, structure, length, and technical depth to the intended audience.
 
 FILE TOOLS
-FILE TOOLS
 - Use the available file tools whenever the user asks about project files,
   project configuration, code, or information stored in the repository.
 - Use list_directory when you need to discover the project structure.
@@ -83,7 +84,18 @@ FILE TOOLS
 - Never infer missing file contents from filenames alone.
 - Base answers about project files on actual tool results.
 - If a tool rejects access, report the actual restriction accurately.
-- File access is restricted to the personal-ai-agent project directory.
+- File read access is restricted to the personal-ai-agent project directory.
+
+DOCUMENT WRITING
+- Use save_document only when the user explicitly asks to save or create
+  a document file.
+- Documents may only be saved inside the workspace directory.
+- Document writes require human approval before they are executed.
+- Never claim that a document was saved unless the save_document tool
+  reports that it was saved successfully.
+- Do not attempt to overwrite existing files automatically.
+- When calling save_document, pass the raw document content only.
+- Do not wrap saved Markdown content in code fences.
 
 GENERAL BEHAVIOUR
 - Do not invent evidence.
@@ -102,12 +114,15 @@ TOOLS = [
     read_file,
     list_directory,
     search_files,
+    save_document,
 ]
+
 
 AVAILABLE_TOOLS = {
     "read_file": read_file,
     "list_directory": list_directory,
     "search_files": search_files,
+    "save_document": save_document,
 }
 
 
@@ -145,6 +160,35 @@ def run_agent_turn(messages):
                 tool_result = (
                     f"Error: Unknown tool requested: {tool_name}"
                 )
+
+            elif tool_name == "save_document":
+                file_path = tool_arguments.get(
+                    "file_path",
+                    "unknown file",
+                )
+
+                print(
+                    f"\n[Write Request] Save document: {file_path}"
+                )
+
+                approval = input(
+                    "Approve this write? [y/N]: "
+                ).strip().lower()
+
+                if approval not in {"y", "yes"}:
+                    tool_result = "Write cancelled by user."
+
+                else:
+                    try:
+                        tool_result = function_to_call(
+                            **tool_arguments
+                        )
+                    except Exception as error:
+                        tool_result = (
+                            f"Error executing tool "
+                            f"'{tool_name}': {error}"
+                        )
+
             else:
                 try:
                     tool_result = function_to_call(
@@ -169,7 +213,11 @@ def main():
     messages = [
         {
             "role": "system",
-            "content": SYSTEM_PROMPT + "\n\n" + DOCUMENTATION_PROMPT,
+            "content": (
+                SYSTEM_PROMPT
+                + "\n\n"
+                + DOCUMENTATION_PROMPT
+            ),
         }
     ]
 
