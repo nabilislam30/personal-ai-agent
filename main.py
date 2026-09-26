@@ -1,6 +1,10 @@
 from ollama import chat
 
-from tools.file_tools import read_file
+from tools.file_tools import (
+    list_directory,
+    read_file,
+    search_files,
+)
 
 
 MODEL = "qwen3:8b"
@@ -57,6 +61,29 @@ CONTENT CREATION
   professional audiences.
 - Adapt tone, structure, length, and technical depth to the intended audience.
 
+FILE TOOLS
+FILE TOOLS
+- Use the available file tools whenever the user asks about project files,
+  project configuration, code, or information stored in the repository.
+- Use list_directory when you need to discover the project structure.
+- Use search_files when you need to find where a value, setting, function,
+  variable, keyword, configuration, or piece of information is defined.
+- Use read_file after locating the relevant file when you need its contents
+  or surrounding context.
+- For questions asking where something is defined, prefer search_files
+  before guessing which file contains it.
+- Search from the project root "." unless the user explicitly limits the
+  request to a particular subdirectory.
+- If a search result identifies a relevant file, inspect that file before
+  drawing conclusions about its contents.
+- Never claim that something does not exist in the project unless you have
+  performed an appropriate project-wide search.
+- Never pretend you have inspected a file that a tool has not returned.
+- Never infer missing file contents from filenames alone.
+- Base answers about project files on actual tool results.
+- If a tool rejects access, report the actual restriction accurately.
+- File access is restricted to the personal-ai-agent project directory.
+
 GENERAL BEHAVIOUR
 - Do not invent evidence.
 - Clearly distinguish observed facts from assumptions.
@@ -70,9 +97,71 @@ GENERAL BEHAVIOUR
 """
 
 
+TOOLS = [
+    read_file,
+    list_directory,
+    search_files,
+]
+
 AVAILABLE_TOOLS = {
     "read_file": read_file,
+    "list_directory": list_directory,
+    "search_files": search_files,
 }
+
+
+def run_agent_turn(messages):
+    """
+    Run one conversation turn.
+
+    The model may call one or more tools before producing
+    its final response.
+    """
+
+    while True:
+        response = chat(
+            model=MODEL,
+            messages=messages,
+            tools=TOOLS,
+        )
+
+        messages.append(response.message)
+
+        if not response.message.tool_calls:
+            return response.message.content
+
+        for tool_call in response.message.tool_calls:
+            tool_name = tool_call.function.name
+            tool_arguments = tool_call.function.arguments
+
+            function_to_call = AVAILABLE_TOOLS.get(tool_name)
+
+            print(
+                f"\n[Tool] {tool_name}({tool_arguments})"
+            )
+
+            if function_to_call is None:
+                tool_result = (
+                    f"Error: Unknown tool requested: {tool_name}"
+                )
+            else:
+                try:
+                    tool_result = function_to_call(
+                        **tool_arguments
+                    )
+                except Exception as error:
+                    tool_result = (
+                        f"Error executing tool "
+                        f"'{tool_name}': {error}"
+                    )
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_name": tool_name,
+                    "content": str(tool_result),
+                }
+            )
 
 
 def main():
@@ -103,50 +192,9 @@ def main():
             }
         )
 
-        response = chat(
-            model=MODEL,
-            messages=messages,
-            tools=[read_file],
-        )
+        assistant_response = run_agent_turn(messages)
 
-        messages.append(response.message)
-
-        if response.message.tool_calls:
-            for tool_call in response.message.tool_calls:
-                tool_name = tool_call.function.name
-                tool_arguments = tool_call.function.arguments
-
-                function_to_call = AVAILABLE_TOOLS.get(tool_name)
-
-                if function_to_call is None:
-                    tool_result = f"Error: Unknown tool: {tool_name}"
-                else:
-                    print(
-                        f"\n[Tool] {tool_name}({tool_arguments})"
-                    )
-
-                    tool_result = function_to_call(**tool_arguments)
-
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_name": tool_name,
-                        "content": str(tool_result),
-                    }
-                )
-
-            final_response = chat(
-                model=MODEL,
-                messages=messages,
-                tools=[read_file],
-            )
-
-            messages.append(final_response.message)
-
-            print(f"\nAgent: {final_response.message.content}")
-
-        else:
-            print(f"\nAgent: {response.message.content}")
+        print(f"\nAgent: {assistant_response}")
 
 
 if __name__ == "__main__":
