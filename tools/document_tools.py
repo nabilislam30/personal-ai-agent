@@ -1,8 +1,6 @@
 from pathlib import Path
 
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-WORKSPACE_ROOT = PROJECT_ROOT / "workspace"
+from config import PROJECT_ROOT, WORKSPACE_ROOT
 
 ALLOWED_EXTENSIONS = {
     ".md",

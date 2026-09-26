@@ -1,71 +1,117 @@
 # Personal AI Agent
 
-A local-first Python AI agent powered by Ollama and Qwen3 8B.
+A local-first Python AI agent powered by Ollama.
 
-The project supports organisation, technical documentation, research,
-coding, DevOps investigation, GitHub Actions analysis, and content
-creation while maintaining explicit security boundaries around write
-and destructive operations.
+Version: **1.0.0**
 
-## Current Architecture
+The project supports persistent conversations, local knowledge retrieval,
+technical documentation, research, coding, DevOps investigation,
+GitHub Actions analysis, and content creation while maintaining explicit
+security boundaries around write and destructive operations.
 
+## Architecture
+
+```text
 User
-↓
-Python Agent
-↓
-Ollama
-↓
-Qwen3 8B
-↓
-Tool Layer
+  |
+  v
+main.py (CLI + persistent sessions)
+  |
+  v
+agent.py (orchestration)
+  |
+  +--> Ollama / Qwen3 8B
+  |
+  +--> Tool Layer
+         |
+         +--> Local files / logs
+         +--> Local RAG knowledge
+         +--> Git
+         +--> Terraform
+         +--> GitHub Actions
+         +--> AWS identity
+         +--> Web research
+         +--> Controlled document writes
+```
 
-## Current Capabilities
+## Core Capabilities
 
-### General Assistant
+### Persistent Conversation Memory
 
-- Conversational terminal interface
-- Session conversation memory
-- Organisation and planning
-- Professional content creation
+Conversations are stored locally in SQLite under `workspace/`.
 
-### Local Files
+The CLI automatically resumes the most recently used session.
 
-- List project directories
-- Read UTF-8 text files
-- Search project files
-- Inspect log tails
-- Restricted to the project directory
+Commands:
 
-### Documentation
+```text
+/new          Start a new conversation
+/sessions     List saved conversations
+/use <id>     Switch to a saved conversation
+/help         Show commands
+exit          Quit
+```
 
-- README drafting
-- Project documentation
-- Jira updates
-- Incident reports
-- RCA documents
-- Architecture documentation
-- Technical summaries
-
-Generated Markdown and text documents can be saved inside
-`workspace/` only after explicit user approval.
+Only user and assistant messages are persisted. Tool traces are not
+replayed across processes, so stale tool output is not treated as
+current evidence.
 
 ### Local Knowledge / RAG
 
-- Local semantic search across personal notes and documentation
-- Markdown and text knowledge sources
-- Local embeddings through Ollama
-- SQLite vector index stored locally
-- Source-aware retrieval with chunk references
-- Knowledge source files ignored by Git by default
+The agent can semantically search personal Markdown and text documents.
 
-The knowledge base uses `embeddinggemma:300m-qat-q4_0` for
-embeddings and stores derived index data under `workspace/`.
+- Source files: `knowledge/`
+- Supported formats: `.md`, `.txt`
+- Embedding model: `embeddinggemma:300m-qat-q4_0`
+- Vector store: local SQLite under `workspace/`
+- Personal knowledge files are ignored by Git by default
+
+Typical prompts:
+
+```text
+Rebuild my knowledge index.
+What have I documented about Kubernetes?
+Search my knowledge for Terraform troubleshooting.
+Use my stored project notes to summarise the ECS architecture.
+```
+
+Rebuilding the knowledge index is treated as a WRITE operation and
+requires explicit approval.
+
+### Local Files
+
+Read-only tools can:
+
+- list project directories
+- read UTF-8 text files
+- search project files
+- inspect log tails
+
+Filesystem access is restricted to the project directory.
+
+### Documentation
+
+The agent can draft:
+
+- README files
+- project documentation
+- Jira updates and evidence
+- incident reports
+- RCAs
+- architecture documentation
+- troubleshooting documentation
+- technical summaries
+
+Generated `.md` and `.txt` files can be saved only under
+`workspace/`, require explicit approval, and do not overwrite existing
+files automatically.
 
 ### Research
 
-- Public web search
-- Public webpage extraction
-- Source URLs returned with research results
+- public web search
+- webpage extraction
+- source URLs in research results
+- preference for primary technical documentation
 
 ### Git
 
@@ -76,6 +122,9 @@ Read-only inspection:
 - staged diffs
 - recent commit history
 
+No commit, push, reset, checkout, or history-modification tool is
+exposed to the model.
+
 ### Terraform
 
 Read-only inspection:
@@ -83,29 +132,29 @@ Read-only inspection:
 - Terraform version
 - formatting checks
 - `terraform validate`
-- inspect existing plan/state files
+- inspection of existing plan/state files
 
-The agent has no `terraform apply` or `terraform destroy` capability.
+There is no `terraform apply` or `terraform destroy` capability.
 
 ### GitHub Actions
 
 Read-only pipeline investigation:
 
-- Check GitHub CLI authentication
-- List recent workflow runs
-- Inspect a specific workflow run
-- Retrieve failed-step logs
-- Deterministically investigate the latest failed workflow run
+- GitHub CLI authentication status
+- recent workflow runs
+- workflow-run details
+- failed-step logs
+- deterministic investigation of the latest failed run
 
-The latest-failure investigation gathers the run, details, and failed
-logs before the model reasons over the evidence.
+The deterministic failure investigator gathers the run, jobs, and logs
+before the model reasons over the evidence.
 
 The agent does not expose workflow rerun, cancellation, deletion,
 deployment approval, or repository-secret modification tools.
 
 ### Cloud
 
-Initial read-only AWS check:
+Current cloud capability is intentionally narrow:
 
 - AWS caller identity
 
@@ -115,29 +164,31 @@ Azure and Azure DevOps authentication are not currently configured.
 
 ### READ
 
-May run automatically.
+Read-only operations may run automatically.
 
 Examples:
 
-- file inspection
+- local file inspection
 - Git status/diff/log
 - Terraform validation
 - web research
 - log inspection
 - GitHub Actions investigation
 - AWS identity inspection
+- local knowledge search
 
 ### WRITE
 
-Requires explicit user approval.
+Write operations require explicit human approval.
 
-Current example:
+Current examples:
 
-- saving generated documentation into `workspace/`
+- saving generated documents
+- rebuilding the derived local knowledge index
 
 ### DESTRUCTIVE
 
-Not available.
+Destructive operations are not exposed.
 
 Examples intentionally unavailable:
 
@@ -145,54 +196,107 @@ Examples intentionally unavailable:
 - `terraform destroy`
 - `kubectl delete`
 - cloud resource deletion
-- Git push
+- Git push/reset
 - IAM/security changes
 - service restarts
 - workflow reruns/cancellation
 
+## Project Structure
+
+```text
+personal-ai-agent/
+├── main.py
+├── agent.py
+├── config.py
+├── permissions.py
+├── sessions.py
+├── VERSION
+├── CHANGELOG.md
+├── requirements.txt
+├── requirements-dev.txt
+├── .env.example
+├── prompts/
+│   ├── system.py
+│   └── documentation.py
+├── tools/
+│   ├── cloud_tools.py
+│   ├── document_tools.py
+│   ├── file_tools.py
+│   ├── git_tools.py
+│   ├── knowledge_tools.py
+│   ├── log_tools.py
+│   ├── pipeline_tools.py
+│   ├── research_tools.py
+│   └── terraform_tools.py
+├── tests/
+└── knowledge/
+```
+
 ## Requirements
 
-- macOS
+Required:
+
+- macOS or Linux
 - Python 3.13+
 - Ollama
-- `qwen3:8b`
 - Git
-- GitHub CLI (`gh`) for GitHub Actions investigation
+- `qwen3:8b`
+- `embeddinggemma:300m-qat-q4_0`
 
-Optional depending on the tools being used:
+Optional depending on features used:
 
+- GitHub CLI (`gh`)
 - Terraform CLI
 - AWS CLI
 
 ## Setup
 
-Create and activate the virtual environment:
+Create and activate a virtual environment:
 
 ```bash
 python3.13 -m venv .venv
 source .venv/bin/activate
 ```
 
-Install Python dependencies:
+Install dependencies:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-Ensure Ollama is running and the chat and embedding models are installed:
+Install development/test dependencies when contributing:
+
+```bash
+python -m pip install -r requirements-dev.txt
+```
+
+Pull the local models:
 
 ```bash
 ollama pull qwen3:8b
 ollama pull embeddinggemma:300m-qat-q4_0
-ollama list
 ```
 
-Authenticate the GitHub CLI for pipeline investigation:
+For GitHub Actions investigation:
 
 ```bash
 gh auth login
 gh auth status
 ```
+
+## Configuration
+
+Configuration is centralised in `config.py` and can be overridden with
+environment variables documented in `.env.example`.
+
+Examples:
+
+```bash
+export PAI_CHAT_MODEL=qwen3:8b
+export PAI_MAX_TOOL_ROUNDS=8
+```
+
+No secrets should be committed to the repository.
 
 ## Run
 
@@ -200,97 +304,31 @@ gh auth status
 python main.py
 ```
 
-## Examples
+## Build the Knowledge Index
 
-```text
-What files are in this project?
-```
-
-```text
-Search the project for references to Ollama.
-```
-
-```text
-Show me the current Git status and explain the changes.
-```
-
-```text
-Validate the Terraform configuration in terraform/.
-```
-
-```text
-Research the official Terraform validate documentation and cite the sources.
-```
-
-```text
-Show me the status of my local knowledge base.
-```
+Place personal `.md` or `.txt` files under `knowledge/`, then ask:
 
 ```text
 Rebuild my knowledge index.
 ```
 
-```text
-What have I documented about Kubernetes?
-```
-
-```text
-Inspect logs/deployment.log and identify evidence of the failure.
-```
-
-```text
-Show me the most recent GitHub Actions runs for this repository.
-```
-
-```text
-Investigate the most recent failed GitHub Actions run.
-Separate observed evidence, likely cause, uncertainty, and remediation.
-```
-
-```text
-Create an RCA from the available evidence and save it as incident-rca.md.
-```
-
-## Local Knowledge Setup
-
-Personal knowledge files belong under `knowledge/`.
-
-Supported formats:
-
-- `.md`
-- `.txt`
-
-Knowledge source files are ignored by Git by default so personal notes
-remain local. `knowledge/README.md` and a non-sensitive `knowledge/example.md`
-fixture are tracked so the workflow can be tested immediately.
-
-After adding or changing knowledge documents, ask the agent:
-
-```text
-Rebuild my knowledge index.
-```
-
-Indexing requires explicit approval because it writes derived SQLite
-index data into `workspace/`.
-
-Once indexed, ask questions such as:
-
-```text
-Search my knowledge for Terraform troubleshooting.
-```
-
-The agent should ground its response in returned excerpts and identify
-the source paths where useful.
+Approve the write when prompted.
 
 ## Tests
 
-Run the general smoke tests:
+Run the automated unit tests:
+
+```bash
+pytest -q
+```
+
+Run the manual general smoke suite:
 
 ```bash
 PYTHONPATH=. python tests/smoke_tests.py
 ```
 
-Run the GitHub Actions pipeline smoke test:
+Run the GitHub Actions smoke suite:
 
 ```bash
 PYTHONPATH=. python tests/pipeline_smoke_tests.py
@@ -298,27 +336,30 @@ PYTHONPATH=. python tests/pipeline_smoke_tests.py
 
 ## CI
 
-The repository includes `.github/workflows/ci.yml`.
+`.github/workflows/ci.yml` automatically:
 
-Normal pushes to `main` validate:
+- installs development dependencies
+- checks dependency consistency
+- compiles Python source
+- runs the pytest suite
 
-- Python 3.13 setup
-- dependency installation
-- dependency consistency
-- Python source compilation
+The workflow also supports a manual `force_failure=true` input to
+create a controlled failed run for pipeline-investigation testing.
 
-The workflow can also be manually triggered with
-`force_failure=true` to create a controlled failed run for pipeline
-investigation testing.
+## Release
 
-## Planned Integrations
+Current version: **1.0.0**
 
-Future additions may include:
+See `CHANGELOG.md` for release contents.
+
+## Future Expansion
+
+Possible post-v1 additions include:
 
 - Azure DevOps when authentication is available
-- broader read-only AWS/Azure inspection
+- broader read-only cloud inspection
+- PDF/Word knowledge ingestion
 - Google Drive
-- PDF ingestion for the local knowledge base
 - task/calendar integrations
-- specialist agents when justified
 - local web UI
+- specialist sub-agents when justified

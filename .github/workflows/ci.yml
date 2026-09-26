@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - v1-finalization
 
   pull_request:
     branches:
@@ -35,13 +36,16 @@ jobs:
         run: python -m pip install --upgrade pip
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install -r requirements-dev.txt
 
       - name: Check installed dependencies
         run: python -m pip check
 
       - name: Compile Python source
-        run: python -m compileall main.py tools prompts tests
+        run: python -m compileall main.py agent.py config.py permissions.py sessions.py tools prompts tests
+
+      - name: Run unit tests
+        run: pytest -q
 
       - name: Intentional test failure
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.force_failure }}
