@@ -158,7 +158,6 @@ Current cloud capability is intentionally narrow:
 
 - AWS caller identity
 
-Azure and Azure DevOps authentication are not currently configured.
 
 ## Security Model
 
@@ -356,7 +355,6 @@ See `CHANGELOG.md` for release contents.
 
 Possible post-v1 additions include:
 
-- Azure DevOps when authentication is available
 - broader read-only cloud inspection
 - PDF/Word knowledge ingestion
 - Google Drive
