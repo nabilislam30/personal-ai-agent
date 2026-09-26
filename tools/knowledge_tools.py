@@ -5,7 +5,9 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+from docx import Document
 from ollama import embed
+from pypdf import PdfReader
 
 from config import (
     EMBEDDING_MODEL,
@@ -13,17 +15,21 @@ from config import (
     KNOWLEDGE_CHUNK_SIZE,
     KNOWLEDGE_EMBED_BATCH_SIZE,
     KNOWLEDGE_INDEX_PATH,
+    KNOWLEDGE_MAX_FILE_BYTES,
     KNOWLEDGE_MAX_RESULT_CHARS,
     KNOWLEDGE_MAX_TOP_K,
     KNOWLEDGE_ROOT,
     PROJECT_ROOT,
 )
 
+
 INDEX_PATH = KNOWLEDGE_INDEX_PATH
 
 ALLOWED_EXTENSIONS = {
     ".md",
     ".txt",
+    ".pdf",
+    ".docx",
 }
 
 EXCLUDED_FILENAMES = {
@@ -38,20 +44,27 @@ CHUNK_OVERLAP = min(
 EMBED_BATCH_SIZE = KNOWLEDGE_EMBED_BATCH_SIZE
 MAX_TOP_K = KNOWLEDGE_MAX_TOP_K
 MAX_RESULT_CHARS = KNOWLEDGE_MAX_RESULT_CHARS
+MAX_FILE_BYTES = KNOWLEDGE_MAX_FILE_BYTES
 
 
 def _knowledge_files() -> list[Path]:
     """
     Return supported knowledge files in a deterministic order.
+
+    Symlinks and paths that resolve outside knowledge/ are ignored.
     """
 
     if not KNOWLEDGE_ROOT.exists():
         return []
 
+    root = KNOWLEDGE_ROOT.resolve()
     files = []
 
     for path in KNOWLEDGE_ROOT.rglob("*"):
         if not path.is_file():
+            continue
+
+        if path.is_symlink():
             continue
 
         if path.name in EXCLUDED_FILENAMES:
@@ -63,17 +76,184 @@ def _knowledge_files() -> list[Path]:
         if path.suffix.lower() not in ALLOWED_EXTENSIONS:
             continue
 
+        try:
+            resolved = path.resolve()
+            resolved.relative_to(root)
+        except (OSError, ValueError):
+            continue
+
+        try:
+            if path.stat().st_size > MAX_FILE_BYTES:
+                continue
+        except OSError:
+            continue
+
         files.append(path)
 
     return sorted(
         files,
-        key=lambda path: str(
-            path.relative_to(KNOWLEDGE_ROOT)
+        key=lambda item: str(
+            item.relative_to(KNOWLEDGE_ROOT)
         ).lower(),
     )
 
 
-def _chunk_text(text: str) -> list[str]:
+def _read_pdf(path: Path) -> str:
+    """
+    Extract text from a PDF without OCR.
+
+    Scanned/image-only PDFs may return little or no text.
+    """
+
+    reader = PdfReader(str(path))
+
+    if reader.is_encrypted:
+        try:
+            unlocked = reader.decrypt("")
+        except Exception as error:
+            raise ValueError(
+                "Encrypted PDF could not be opened."
+            ) from error
+
+        if unlocked == 0:
+            raise ValueError(
+                "Encrypted PDF requires a password."
+            )
+
+    sections = []
+
+    for page_number, page in enumerate(
+        reader.pages,
+        start=1,
+    ):
+        try:
+            text = page.extract_text() or ""
+        except Exception as error:
+            raise ValueError(
+                f"Could not extract PDF page {page_number}."
+            ) from error
+
+        text = text.strip()
+
+        if text:
+            sections.append(
+                f"[Page {page_number}]\n{text}"
+            )
+
+    return "\n\n".join(sections)
+
+
+def _read_docx(path: Path) -> str:
+    """
+    Extract paragraph and table text from a DOCX file.
+    """
+
+    document = Document(str(path))
+    sections = []
+
+    for paragraph in document.paragraphs:
+        text = paragraph.text.strip()
+
+        if text:
+            sections.append(text)
+
+    for table_number, table in enumerate(
+        document.tables,
+        start=1,
+    ):
+        table_rows = []
+
+        for row in table.rows:
+            cells = [
+                cell.text.strip()
+                for cell in row.cells
+            ]
+
+            if any(cells):
+                table_rows.append(
+                    " | ".join(cells)
+                )
+
+        if table_rows:
+            sections.append(
+                (
+                    f"[Table {table_number}]\n"
+                    + "\n".join(table_rows)
+                )
+            )
+
+    return "\n\n".join(sections)
+
+
+def _read_knowledge_document(
+    path: Path,
+) -> str:
+    """
+    Extract searchable text from a supported knowledge document.
+    """
+
+    extension = path.suffix.lower()
+
+    if extension in {
+        ".md",
+        ".txt",
+    }:
+        return path.read_text(
+            encoding="utf-8"
+        )
+
+    if extension == ".pdf":
+        return _read_pdf(path)
+
+    if extension == ".docx":
+        return _read_docx(path)
+
+    raise ValueError(
+        f"Unsupported knowledge file type: {extension}"
+    )
+
+
+def _source_manifest(
+    files: list[Path],
+) -> str:
+    """
+    Build a lightweight source-state fingerprint.
+    """
+
+    entries = []
+
+    for path in files:
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+
+        entries.append(
+            (
+                str(
+                    path.relative_to(
+                        KNOWLEDGE_ROOT
+                    )
+                ),
+                stat.st_size,
+                stat.st_mtime_ns,
+            )
+        )
+
+    payload = json.dumps(
+        entries,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+    return hashlib.sha256(
+        payload.encode("utf-8")
+    ).hexdigest()
+
+
+def _chunk_text(
+    text: str,
+) -> list[str]:
     """
     Split text into overlapping chunks while preferring paragraph breaks.
     """
@@ -118,7 +298,9 @@ def _chunk_text(text: str) -> list[str]:
                 if line_break != -1:
                     end = line_break
 
-        chunk = cleaned[start:end].strip()
+        chunk = cleaned[
+            start:end
+        ].strip()
 
         if chunk:
             chunks.append(chunk)
@@ -191,18 +373,30 @@ def _cosine_similarity(
 
     dot_product = sum(
         a * b
-        for a, b in zip(left, right)
+        for a, b in zip(
+            left,
+            right,
+        )
     )
 
     left_norm = math.sqrt(
-        sum(value * value for value in left)
+        sum(
+            value * value
+            for value in left
+        )
     )
 
     right_norm = math.sqrt(
-        sum(value * value for value in right)
+        sum(
+            value * value
+            for value in right
+        )
     )
 
-    if left_norm == 0 or right_norm == 0:
+    if (
+        left_norm == 0
+        or right_norm == 0
+    ):
         return 0.0
 
     return (
@@ -214,9 +408,6 @@ def _cosine_similarity(
 def list_knowledge_documents() -> str:
     """
     List documents currently available to the local knowledge base.
-
-    Returns:
-        Supported Markdown and text files inside knowledge/.
     """
 
     files = _knowledge_files()
@@ -224,7 +415,7 @@ def list_knowledge_documents() -> str:
     if not files:
         return (
             "No knowledge documents were found. "
-            "Add .md or .txt files inside knowledge/."
+            "Add .md, .txt, .pdf, or .docx files inside knowledge/."
         )
 
     lines = [
@@ -238,7 +429,8 @@ def list_knowledge_documents() -> str:
 
         lines.append(
             f"- {relative_path} "
-            f"({path.stat().st_size} bytes)"
+            f"({path.suffix.lower()}, "
+            f"{path.stat().st_size} bytes)"
         )
 
     return "\n".join(lines)
@@ -246,18 +438,19 @@ def list_knowledge_documents() -> str:
 
 def knowledge_status() -> str:
     """
-    Show the status of the local knowledge base and vector index.
-
-    Returns:
-        Knowledge document count, index state, chunk count, and model.
+    Show source and index status for the local knowledge base.
     """
 
     files = _knowledge_files()
+    current_manifest = _source_manifest(
+        files
+    )
 
     if not INDEX_PATH.exists():
         return (
             "Knowledge base status:\n"
             f"- Source documents: {len(files)}\n"
+            "- Supported formats: .md, .txt, .pdf, .docx\n"
             "- Index: not built\n"
             "- Indexed chunks: 0\n"
             f"- Embedding model: {EMBEDDING_MODEL}"
@@ -272,18 +465,18 @@ def knowledge_status() -> str:
             "SELECT COUNT(*) FROM chunks"
         ).fetchone()[0]
 
-        indexed_documents = connection.execute(
-            """
-            SELECT COUNT(DISTINCT source_path)
-            FROM chunks
-            """
-        ).fetchone()[0]
+        indexed_documents = (
+            connection.execute(
+                """
+                SELECT COUNT(DISTINCT source_path)
+                FROM chunks
+                """
+            ).fetchone()[0]
+        )
 
         metadata_rows = connection.execute(
             "SELECT key, value FROM metadata"
         ).fetchall()
-
-        metadata = dict(metadata_rows)
 
         connection.close()
 
@@ -292,6 +485,10 @@ def knowledge_status() -> str:
             "Error reading knowledge index: "
             f"{error}"
         )
+
+    metadata = dict(
+        metadata_rows
+    )
 
     indexed_at = metadata.get(
         "indexed_at",
@@ -303,14 +500,27 @@ def knowledge_status() -> str:
         EMBEDDING_MODEL,
     )
 
+    indexed_manifest = metadata.get(
+        "source_manifest",
+        "",
+    )
+
+    source_state = (
+        "up to date"
+        if indexed_manifest == current_manifest
+        else "changed since last index"
+    )
+
     return (
         "Knowledge base status:\n"
         f"- Source documents: {len(files)}\n"
         f"- Indexed documents: {indexed_documents}\n"
         f"- Indexed chunks: {chunk_count}\n"
+        f"- Source state: {source_state}\n"
         f"- Embedding model: {indexed_model}\n"
         f"- Last indexed: {indexed_at}\n"
-        f"- Index path: {INDEX_PATH.relative_to(PROJECT_ROOT)}"
+        f"- Index path: "
+        f"{INDEX_PATH.relative_to(PROJECT_ROOT)}"
     )
 
 
@@ -318,11 +528,8 @@ def index_knowledge() -> str:
     """
     Rebuild the local vector index from knowledge/ documents.
 
-    This writes only derived index data inside workspace/.
-    It never modifies the source documents in knowledge/.
-
-    Returns:
-        Indexing summary or an actionable error.
+    This writes derived index data only under workspace/.
+    Source documents are never modified.
     """
 
     files = _knowledge_files()
@@ -330,30 +537,54 @@ def index_knowledge() -> str:
     if not files:
         return (
             "No knowledge documents were found. "
-            "Add .md or .txt files inside knowledge/ before indexing."
+            "Add .md, .txt, .pdf, or .docx files "
+            "inside knowledge/ before indexing."
         )
 
     chunk_records = []
+    skipped = []
+    indexed_paths = set()
 
     for path in files:
-        try:
-            text = path.read_text(
-                encoding="utf-8"
-            )
-        except UnicodeDecodeError:
-            continue
-        except OSError as error:
-            return (
-                f"Error reading {path.name}: {error}"
-            )
-
         relative_path = str(
             path.relative_to(
                 KNOWLEDGE_ROOT
             )
         )
 
-        chunks = _chunk_text(text)
+        try:
+            text = _read_knowledge_document(
+                path
+            )
+        except (
+            UnicodeDecodeError,
+            OSError,
+            ValueError,
+        ) as error:
+            skipped.append(
+                f"{relative_path}: {error}"
+            )
+            continue
+
+        if not text.strip():
+            skipped.append(
+                f"{relative_path}: no extractable text"
+            )
+            continue
+
+        chunks = _chunk_text(
+            text
+        )
+
+        if not chunks:
+            skipped.append(
+                f"{relative_path}: no searchable chunks"
+            )
+            continue
+
+        indexed_paths.add(
+            relative_path
+        )
 
         for chunk_index, content in enumerate(
             chunks,
@@ -373,9 +604,18 @@ def index_knowledge() -> str:
             )
 
     if not chunk_records:
+        detail = ""
+
+        if skipped:
+            detail = (
+                "\nSkipped:\n- "
+                + "\n- ".join(skipped)
+            )
+
         return (
             "Knowledge documents were found, but no readable "
             "text chunks could be created."
+            + detail
         )
 
     embeddings = []
@@ -387,7 +627,8 @@ def index_knowledge() -> str:
             EMBED_BATCH_SIZE,
         ):
             batch = chunk_records[
-                start:start + EMBED_BATCH_SIZE
+                start:start
+                + EMBED_BATCH_SIZE
             ]
 
             response = embed(
@@ -414,10 +655,13 @@ def index_knowledge() -> str:
             f"Details: {error}"
         )
 
-    if len(embeddings) != len(chunk_records):
+    if (
+        len(embeddings)
+        != len(chunk_records)
+    ):
         return (
-            "Error: embedding count did not match the number "
-            "of knowledge chunks."
+            "Error: embedding count did not match "
+            "the number of knowledge chunks."
         )
 
     try:
@@ -458,31 +702,30 @@ def index_knowledge() -> str:
                     ),
                 )
 
-            indexed_at = datetime.now(
-                timezone.utc
-            ).isoformat()
-
-            connection.execute(
-                """
-                INSERT INTO metadata (key, value)
-                VALUES (?, ?)
-                """,
-                (
-                    "indexed_at",
-                    indexed_at,
+            metadata = {
+                "indexed_at": datetime.now(
+                    timezone.utc
+                ).isoformat(),
+                "embedding_model": EMBEDDING_MODEL,
+                "source_manifest": _source_manifest(
+                    files
                 ),
-            )
+            }
 
-            connection.execute(
-                """
-                INSERT INTO metadata (key, value)
-                VALUES (?, ?)
-                """,
-                (
-                    "embedding_model",
-                    EMBEDDING_MODEL,
-                ),
-            )
+            for key, value in metadata.items():
+                connection.execute(
+                    """
+                    INSERT INTO metadata (
+                        key,
+                        value
+                    )
+                    VALUES (?, ?)
+                    """,
+                    (
+                        key,
+                        value,
+                    ),
+                )
 
         connection.close()
 
@@ -492,13 +735,36 @@ def index_knowledge() -> str:
             f"{error}"
         )
 
-    return (
-        "Knowledge index rebuilt successfully.\n"
-        f"- Documents indexed: {len(files)}\n"
-        f"- Chunks indexed: {len(chunk_records)}\n"
-        f"- Embedding model: {EMBEDDING_MODEL}\n"
-        f"- Index: {INDEX_PATH.relative_to(PROJECT_ROOT)}"
-    )
+    lines = [
+        "Knowledge index rebuilt successfully.",
+        (
+            f"- Documents indexed: "
+            f"{len(indexed_paths)}"
+        ),
+        (
+            f"- Chunks indexed: "
+            f"{len(chunk_records)}"
+        ),
+        f"- Embedding model: {EMBEDDING_MODEL}",
+        (
+            f"- Index: "
+            f"{INDEX_PATH.relative_to(PROJECT_ROOT)}"
+        ),
+    ]
+
+    if skipped:
+        lines.append(
+            f"- Documents skipped: {len(skipped)}"
+        )
+        lines.append(
+            "Skipped:"
+        )
+        lines.extend(
+            f"- {item}"
+            for item in skipped
+        )
+
+    return "\n".join(lines)
 
 
 def search_knowledge(
@@ -507,16 +773,6 @@ def search_knowledge(
 ) -> str:
     """
     Search the local vector knowledge base semantically.
-
-    Args:
-        query:
-            Natural-language search query.
-
-        top_k:
-            Number of relevant chunks to return, from 1 to 10.
-
-    Returns:
-        Ranked source excerpts with similarity scores.
     """
 
     if not query.strip():
@@ -526,13 +782,17 @@ def search_knowledge(
 
     top_k = max(
         1,
-        min(int(top_k), MAX_TOP_K),
+        min(
+            int(top_k),
+            MAX_TOP_K,
+        ),
     )
 
     if not INDEX_PATH.exists():
         return (
             "Knowledge index has not been built yet. "
-            "Run index_knowledge after adding documents to knowledge/."
+            "Run index_knowledge after adding "
+            "documents to knowledge/."
         )
 
     try:
@@ -550,6 +810,10 @@ def search_knowledge(
                 embedding_model
             FROM chunks
             """
+        ).fetchall()
+
+        metadata_rows = connection.execute(
+            "SELECT key, value FROM metadata"
         ).fetchall()
 
         connection.close()
@@ -633,12 +897,26 @@ def search_knowledge(
         reverse=True,
     )
 
-    selected = ranked[:top_k]
+    selected = ranked[
+        :top_k
+    ]
 
     if not selected:
         return (
             "No searchable knowledge chunks were available."
         )
+
+    metadata = dict(
+        metadata_rows
+    )
+
+    current_manifest = _source_manifest(
+        _knowledge_files()
+    )
+    indexed_manifest = metadata.get(
+        "source_manifest",
+        "",
+    )
 
     output = [
         (
@@ -646,6 +924,19 @@ def search_knowledge(
             f"for: {query}"
         ),
     ]
+
+    if (
+        indexed_manifest
+        and indexed_manifest
+        != current_manifest
+    ):
+        output.append(
+            (
+                "\nWarning: knowledge source files changed "
+                "since the index was built. Rebuild the "
+                "knowledge index for current results."
+            )
+        )
 
     for rank, (
         score,
@@ -660,8 +951,13 @@ def search_knowledge(
             :MAX_RESULT_CHARS
         ]
 
-        if len(content) > MAX_RESULT_CHARS:
-            excerpt += "\n[Excerpt truncated]"
+        if (
+            len(content)
+            > MAX_RESULT_CHARS
+        ):
+            excerpt += (
+                "\n[Excerpt truncated]"
+            )
 
         output.append(
             (

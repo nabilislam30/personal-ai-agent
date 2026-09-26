@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - v1-finalization
+      - v2-core
 
   pull_request:
     branches:
@@ -42,7 +43,7 @@ jobs:
         run: python -m pip check
 
       - name: Compile Python source
-        run: python -m compileall main.py agent.py config.py permissions.py sessions.py tools prompts tests
+        run: python -m compileall main.py web_app.py agent.py config.py permissions.py sessions.py tools prompts tests
 
       - name: Run unit tests
         run: python -m pytest -q

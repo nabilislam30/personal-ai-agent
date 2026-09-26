@@ -18,6 +18,8 @@ EMBEDDING_MODEL = os.getenv(
     "embeddinggemma:300m-qat-q4_0",
 )
 
+WEB_HOST = os.getenv("PAI_WEB_HOST", "127.0.0.1")
+
 
 def _env_int(
     name: str,
@@ -71,6 +73,24 @@ KNOWLEDGE_MAX_RESULT_CHARS = _env_int(
     2200,
     500,
     12000,
+)
+KNOWLEDGE_MAX_FILE_BYTES = _env_int(
+    "PAI_KNOWLEDGE_MAX_FILE_BYTES",
+    25_000_000,
+    1_000_000,
+    100_000_000,
+)
+WEB_PORT = _env_int(
+    "PAI_WEB_PORT",
+    8000,
+    1024,
+    65535,
+)
+WEB_MAX_UPLOAD_BYTES = _env_int(
+    "PAI_WEB_MAX_UPLOAD_BYTES",
+    25_000_000,
+    1_000_000,
+    100_000_000,
 )
 
 SESSION_DB_PATH = WORKSPACE_ROOT / "sessions.sqlite3"
