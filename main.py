@@ -1,5 +1,6 @@
 from ollama import chat
 
+from prompts.documentation import DOCUMENTATION_PROMPT
 from tools.file_tools import (
     list_directory,
     read_file,
@@ -168,7 +169,7 @@ def main():
     messages = [
         {
             "role": "system",
-            "content": SYSTEM_PROMPT,
+            "content": SYSTEM_PROMPT + "\n\n" + DOCUMENTATION_PROMPT,
         }
     ]
 
