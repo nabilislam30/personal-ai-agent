@@ -16,6 +16,12 @@ from tools.git_tools import (
     git_status,
 )
 from tools.log_tools import read_log_tail
+from tools.knowledge_tools import (
+    index_knowledge,
+    knowledge_status,
+    list_knowledge_documents,
+    search_knowledge,
+)
 from tools.pipeline_tools import (
     github_actions_failed_logs,
     github_actions_run_details,
@@ -186,6 +192,52 @@ Unconfirmed assumptions:
 
 Recommended next steps:
 - safe investigation or remediation
+
+KNOWLEDGE BASE
+
+Available local knowledge tools:
+- knowledge_status
+- list_knowledge_documents
+- index_knowledge
+- search_knowledge
+
+The knowledge base is local-first.
+
+Source documents live inside knowledge/.
+The derived SQLite vector index lives inside workspace/ and is not
+committed to Git.
+
+Use knowledge_status to check whether the knowledge base is ready.
+
+Use list_knowledge_documents to discover which local knowledge
+documents are available.
+
+Use search_knowledge when the user asks about:
+- their notes
+- their stored documentation
+- their previous project write-ups
+- their saved articles
+- information they say is in their knowledge base
+
+Use index_knowledge only when the user explicitly asks to build,
+rebuild, refresh, or update the knowledge index.
+
+index_knowledge is a WRITE operation because it rebuilds derived
+local index data. It therefore requires human approval.
+
+When answering from search_knowledge:
+- ground the answer in returned source excerpts
+- mention the source file paths when useful
+- preserve uncertainty when the retrieved excerpts are incomplete
+- do not claim that a source says something unless the returned text
+  supports it
+- do not silently replace missing source information with general
+  model knowledge
+- if outside knowledge is added, clearly distinguish it from the
+  retrieved local sources
+
+If search_knowledge reports that the index is missing or stale,
+explain that the knowledge index needs to be rebuilt.
 
 PIPELINE INVESTIGATION
 
@@ -383,6 +435,12 @@ TOOLS = [
     # Documents
     save_document,
 
+    # Knowledge / RAG
+    knowledge_status,
+    list_knowledge_documents,
+    index_knowledge,
+    search_knowledge,
+
     # Research
     web_search,
     fetch_webpage,
@@ -418,6 +476,7 @@ AVAILABLE_TOOLS = {
 
 WRITE_TOOLS = {
     "save_document",
+    "index_knowledge",
 }
 
 
@@ -437,6 +496,11 @@ def request_write_approval(
 
         print(
             f"\n[Write Request] Save document: {file_path}"
+        )
+
+    elif tool_name == "index_knowledge":
+        print(
+            "\n[Write Request] Rebuild local knowledge index"
         )
 
     else:
