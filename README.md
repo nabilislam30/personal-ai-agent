@@ -2,47 +2,123 @@
 
 A local-first Python AI agent powered by Ollama.
 
-Version: **1.0.0**
+Version: **2.0.0**
 
-The project supports persistent conversations, local knowledge retrieval,
-technical documentation, research, coding, DevOps investigation,
-GitHub Actions analysis, and content creation while maintaining explicit
-security boundaries around write and destructive operations.
+V2 builds on the stable v1 agent with document ingestion, deeper
+read-only AWS inspection, and a local browser interface.
 
 ## Architecture
 
 ```text
-User
-  |
-  v
-main.py (CLI + persistent sessions)
-  |
-  v
-agent.py (orchestration)
-  |
-  +--> Ollama / Qwen3 8B
-  |
-  +--> Tool Layer
-         |
-         +--> Local files / logs
-         +--> Local RAG knowledge
-         +--> Git
-         +--> Terraform
-         +--> GitHub Actions
-         +--> AWS identity
-         +--> Web research
-         +--> Controlled document writes
+CLI (main.py)          Local Web UI (web_app.py)
+       \                    /
+        \                  /
+         v                v
+            agent.py
+         orchestration
+              |
+        Ollama / Qwen3
+              |
+   +----------+-----------+
+   |          |           |
+Local RAG   DevOps      General
+   |          |           |
+PDF/DOCX    Git         Research
+MD/TXT      Terraform   Documentation
+SQLite      GitHub      Planning
+Embeddings  AWS
+              |
+      Permission Layer
+READ -> automatic
+WRITE -> explicit approval
+DESTRUCTIVE -> unavailable
 ```
 
-## Core Capabilities
+## V2 Features
+
+### Local Web UI
+
+Start the browser interface:
+
+```bash
+python web_app.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+The server binds to localhost by default.
+
+The web UI supports:
+
+- persistent conversation sessions
+- creating and switching sessions
+- local chat through Qwen3/Ollama
+- per-message approval for agent write tools
+- knowledge document uploads
+- knowledge-index rebuilds
+- knowledge-index status
+
+The **Approve write tools for this message** checkbox is intentionally
+off by default. It provides explicit approval only for the current
+message.
+
+### PDF and DOCX Knowledge Ingestion
+
+Supported local knowledge formats:
+
+- `.md`
+- `.txt`
+- `.pdf`
+- `.docx`
+
+PDF ingestion extracts embedded text. Scanned/image-only PDFs are not
+OCR'd automatically.
+
+DOCX ingestion extracts paragraphs and table contents.
+
+Documents can be copied directly into `knowledge/` or uploaded through
+the local web UI. Web uploads are stored under `knowledge/inbox/`.
+
+Knowledge files are ignored by Git by default.
+
+### Knowledge Index State Detection
+
+The local RAG system records a fingerprint of the source-document state.
+
+If files change after indexing:
+
+- `knowledge_status` reports that sources changed
+- semantic search warns that the index may be stale
+- rebuilding the index refreshes the embeddings
+
+### Deeper Read-Only AWS Inspection
+
+Available AWS tools:
+
+- caller identity
+- configured region
+- EC2 instance inventory
+- ECS cluster listing
+- ECS service listing
+- EKS cluster listing
+- CloudWatch alarm inspection
+- Route 53 hosted-zone inspection
+- S3 bucket inventory
+
+These tools use fixed AWS CLI read operations. The agent cannot create,
+modify, scale, restart, deploy, or delete AWS resources.
+
+## Existing Core Capabilities
 
 ### Persistent Conversation Memory
 
 Conversations are stored locally in SQLite under `workspace/`.
 
-The CLI automatically resumes the most recently used session.
-
-Commands:
+CLI commands:
 
 ```text
 /new          Start a new conversation
@@ -52,42 +128,8 @@ Commands:
 exit          Quit
 ```
 
-Only user and assistant messages are persisted. Tool traces are not
-replayed across processes, so stale tool output is not treated as
-current evidence.
-
-### Local Knowledge / RAG
-
-The agent can semantically search personal Markdown and text documents.
-
-- Source files: `knowledge/`
-- Supported formats: `.md`, `.txt`
-- Embedding model: `embeddinggemma:300m-qat-q4_0`
-- Vector store: local SQLite under `workspace/`
-- Personal knowledge files are ignored by Git by default
-
-Typical prompts:
-
-```text
-Rebuild my knowledge index.
-What have I documented about Kubernetes?
-Search my knowledge for Terraform troubleshooting.
-Use my stored project notes to summarise the ECS architecture.
-```
-
-Rebuilding the knowledge index is treated as a WRITE operation and
-requires explicit approval.
-
-### Local Files
-
-Read-only tools can:
-
-- list project directories
-- read UTF-8 text files
-- search project files
-- inspect log tails
-
-Filesystem access is restricted to the project directory.
+Only user and assistant messages are persisted. Old tool traces are not
+replayed after restarting the application.
 
 ### Documentation
 
@@ -95,7 +137,7 @@ The agent can draft:
 
 - README files
 - project documentation
-- Jira updates and evidence
+- Jira updates
 - incident reports
 - RCAs
 - architecture documentation
@@ -103,13 +145,13 @@ The agent can draft:
 - technical summaries
 
 Generated `.md` and `.txt` files can be saved only under
-`workspace/`, require explicit approval, and do not overwrite existing
+`workspace/`, require explicit approval, and cannot overwrite existing
 files automatically.
 
 ### Research
 
 - public web search
-- webpage extraction
+- public webpage extraction
 - source URLs in research results
 - preference for primary technical documentation
 
@@ -122,9 +164,6 @@ Read-only inspection:
 - staged diffs
 - recent commit history
 
-No commit, push, reset, checkout, or history-modification tool is
-exposed to the model.
-
 ### Terraform
 
 Read-only inspection:
@@ -132,7 +171,7 @@ Read-only inspection:
 - Terraform version
 - formatting checks
 - `terraform validate`
-- inspection of existing plan/state files
+- existing plan/state inspection
 
 There is no `terraform apply` or `terraform destroy` capability.
 
@@ -140,96 +179,49 @@ There is no `terraform apply` or `terraform destroy` capability.
 
 Read-only pipeline investigation:
 
-- GitHub CLI authentication status
-- recent workflow runs
+- GitHub CLI authentication
+- workflow run listing
 - workflow-run details
 - failed-step logs
-- deterministic investigation of the latest failed run
-
-The deterministic failure investigator gathers the run, jobs, and logs
-before the model reasons over the evidence.
-
-The agent does not expose workflow rerun, cancellation, deletion,
-deployment approval, or repository-secret modification tools.
-
-### Cloud
-
-Current cloud capability is intentionally narrow:
-
-- AWS caller identity
-
+- deterministic latest-failed-run analysis
 
 ## Security Model
 
 ### READ
 
-Read-only operations may run automatically.
-
-Examples:
+May run automatically:
 
 - local file inspection
-- Git status/diff/log
+- local knowledge search
+- Git inspection
 - Terraform validation
+- GitHub Actions investigation
+- AWS inspection
 - web research
 - log inspection
-- GitHub Actions investigation
-- AWS identity inspection
-- local knowledge search
 
 ### WRITE
 
-Write operations require explicit human approval.
-
-Current examples:
+Requires explicit human approval:
 
 - saving generated documents
-- rebuilding the derived local knowledge index
+- rebuilding the knowledge index
+
+Direct web UI actions such as uploading a knowledge file or pressing
+**Rebuild index** are themselves explicit user actions.
 
 ### DESTRUCTIVE
 
-Destructive operations are not exposed.
-
-Examples intentionally unavailable:
+Not exposed:
 
 - `terraform apply`
 - `terraform destroy`
 - `kubectl delete`
-- cloud resource deletion
 - Git push/reset
-- IAM/security changes
+- AWS resource mutation/deletion
+- IAM changes
 - service restarts
 - workflow reruns/cancellation
-
-## Project Structure
-
-```text
-personal-ai-agent/
-├── main.py
-├── agent.py
-├── config.py
-├── permissions.py
-├── sessions.py
-├── VERSION
-├── CHANGELOG.md
-├── requirements.txt
-├── requirements-dev.txt
-├── .env.example
-├── prompts/
-│   ├── system.py
-│   └── documentation.py
-├── tools/
-│   ├── cloud_tools.py
-│   ├── document_tools.py
-│   ├── file_tools.py
-│   ├── git_tools.py
-│   ├── knowledge_tools.py
-│   ├── log_tools.py
-│   ├── pipeline_tools.py
-│   ├── research_tools.py
-│   └── terraform_tools.py
-├── tests/
-└── knowledge/
-```
 
 ## Requirements
 
@@ -242,7 +234,7 @@ Required:
 - `qwen3:8b`
 - `embeddinggemma:300m-qat-q4_0`
 
-Optional depending on features used:
+Optional depending on the feature:
 
 - GitHub CLI (`gh`)
 - Terraform CLI
@@ -250,7 +242,7 @@ Optional depending on features used:
 
 ## Setup
 
-Create and activate a virtual environment:
+Create and activate the virtual environment:
 
 ```bash
 python3.13 -m venv .venv
@@ -263,13 +255,13 @@ Install dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Install development/test dependencies when contributing:
+Install development/test dependencies:
 
 ```bash
 python -m pip install -r requirements-dev.txt
 ```
 
-Pull the local models:
+Pull local models:
 
 ```bash
 ollama pull qwen3:8b
@@ -283,39 +275,40 @@ gh auth login
 gh auth status
 ```
 
-## Configuration
-
-Configuration is centralised in `config.py` and can be overridden with
-environment variables documented in `.env.example`.
-
-Examples:
-
-```bash
-export PAI_CHAT_MODEL=qwen3:8b
-export PAI_MAX_TOOL_ROUNDS=8
-```
-
-No secrets should be committed to the repository.
+For AWS inspection, use your existing AWS CLI authentication and
+least-privilege credentials.
 
 ## Run
+
+Terminal:
 
 ```bash
 python main.py
 ```
 
-## Build the Knowledge Index
+Web:
 
-Place personal `.md` or `.txt` files under `knowledge/`, then ask:
-
-```text
-Rebuild my knowledge index.
+```bash
+python web_app.py
 ```
 
-Approve the write when prompted.
+## Configuration
+
+Configuration is centralised in `config.py`.
+
+Environment overrides are documented in `.env.example`, including:
+
+- chat and embedding models
+- knowledge chunking limits
+- maximum knowledge file size
+- web host/port
+- maximum web upload size
+
+The default web host is `127.0.0.1`.
 
 ## Tests
 
-Run the automated unit tests:
+Run unit tests:
 
 ```bash
 python -m pytest -q
@@ -335,29 +328,28 @@ PYTHONPATH=. python tests/pipeline_smoke_tests.py
 
 ## CI
 
-`.github/workflows/ci.yml` automatically:
+GitHub Actions validates:
 
-- installs development dependencies
-- checks dependency consistency
-- compiles Python source
-- runs the pytest suite
+- dependency installation
+- dependency consistency
+- Python compilation
+- automated pytest tests
 
-The workflow also supports a manual `force_failure=true` input to
-create a controlled failed run for pipeline-investigation testing.
+A manual `force_failure=true` input remains available for controlled
+pipeline-failure investigation testing.
 
 ## Release
 
-Current version: **1.0.0**
+Current version: **2.0.0**
 
 See `CHANGELOG.md` for release contents.
 
-## Future Expansion
+## Later Expansion
 
-Possible post-v1 additions include:
+Potential future additions:
 
-- broader read-only cloud inspection
-- PDF/Word knowledge ingestion
 - Google Drive
-- task/calendar integrations
-- local web UI
-- specialist sub-agents when justified
+- task/calendar integration
+- OCR for scanned PDFs
+- richer AWS service-specific investigations
+- specialist internal workflows where they materially improve reliability

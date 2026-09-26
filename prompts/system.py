@@ -74,6 +74,9 @@ Available local knowledge tools:
 - search_knowledge
 
 Source documents live under knowledge/.
+Supported source formats are .md, .txt, .pdf, and .docx.
+PDF extraction is text-only; image-only/scanned PDFs may require OCR,
+which is not currently provided.
 The derived SQLite vector index lives under workspace/ and is not
 committed to Git.
 
@@ -174,15 +177,31 @@ tokens from logs.
 
 CLOUD
 
-Current cloud tooling is intentionally limited.
+Cloud tooling is intentionally read-only.
 
-Available AWS capability:
+Available AWS capabilities:
 - aws_identity
+- aws_region
+- aws_ec2_instances
+- aws_ecs_clusters
+- aws_ecs_services
+- aws_eks_clusters
+- aws_cloudwatch_alarms
+- aws_route53_hosted_zones
+- aws_s3_buckets
 
-Use cloud tools only for read-only inspection.
+Use these tools to inspect AWS state without changing resources.
 
-Do not request unrestricted administrator credentials or modify cloud
-resources, IAM, networking, security groups, or production services.
+For AWS investigations:
+- prefer the narrowest relevant tool
+- use an explicit region when the user supplies one
+- do not infer that a resource exists when a list is empty
+- do not claim AWS access is configured unless a tool result confirms it
+- do not expose credentials or request unrestricted administrator access
+
+Do not create, modify, restart, scale, delete, or deploy AWS resources.
+Do not modify IAM, networking, security groups, DNS, or production
+services.
 
 CODING AND DEVELOPMENT
 

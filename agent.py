@@ -10,7 +10,17 @@ from permissions import (
 )
 from prompts.documentation import DOCUMENTATION_PROMPT
 from prompts.system import SYSTEM_PROMPT
-from tools.cloud_tools import aws_identity
+from tools.cloud_tools import (
+    aws_cloudwatch_alarms,
+    aws_ec2_instances,
+    aws_ecs_clusters,
+    aws_ecs_services,
+    aws_eks_clusters,
+    aws_identity,
+    aws_region,
+    aws_route53_hosted_zones,
+    aws_s3_buckets,
+)
 from tools.document_tools import save_document
 from tools.file_tools import (
     list_directory,
@@ -68,6 +78,14 @@ TOOLS = [
     terraform_validate,
     terraform_show,
     aws_identity,
+    aws_region,
+    aws_ec2_instances,
+    aws_ecs_clusters,
+    aws_ecs_services,
+    aws_eks_clusters,
+    aws_cloudwatch_alarms,
+    aws_route53_hosted_zones,
+    aws_s3_buckets,
     github_auth_status,
     github_actions_runs,
     github_actions_run_details,
