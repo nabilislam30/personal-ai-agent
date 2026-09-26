@@ -261,7 +261,8 @@ Supported formats:
 - `.txt`
 
 Knowledge source files are ignored by Git by default so personal notes
-remain local. Only `knowledge/README.md` is tracked.
+remain local. `knowledge/README.md` and a non-sensitive `knowledge/example.md`
+fixture are tracked so the workflow can be tested immediately.
 
 After adding or changing knowledge documents, ask the agent:
 
