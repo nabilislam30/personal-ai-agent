@@ -25,10 +25,9 @@ knowledge/
 
 Files placed under `knowledge/` are ignored by Git by default.
 
-Only this README is tracked.
+This README and the non-sensitive example.md file are tracked.
 
-That means personal notes and reference material stay local unless you
-explicitly choose to version-control them.
+Personal notes and reference material stay local unless you explicitly choose to version-control them. The tracked example.md file exists only so the RAG workflow can be tested immediately.
 
 ## Embedding Model
 
