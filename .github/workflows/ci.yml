@@ -45,7 +45,7 @@ jobs:
         run: python -m compileall main.py agent.py config.py permissions.py sessions.py tools prompts tests
 
       - name: Run unit tests
-        run: pytest -q
+        run: python -m pytest -q
 
       - name: Intentional test failure
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.force_failure }}

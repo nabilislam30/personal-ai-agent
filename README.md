@@ -319,7 +319,7 @@ Approve the write when prompted.
 Run the automated unit tests:
 
 ```bash
-pytest -q
+python -m pytest -q
 ```
 
 Run the manual general smoke suite:
