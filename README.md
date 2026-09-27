@@ -2,11 +2,92 @@
 
 A local-first, single-user Python AI agent powered by Ollama.
 
-Current version: **2.1.0**
+Current version: **2.2.0**
 
 The project combines fast conversational chat, persistent local sessions,
 RAG over personal documents, read-only DevOps investigation, controlled
 document writing, and a private browser interface.
+
+## What changed in 2.2
+
+### Minimal Google-style interface
+
+The browser interface now starts with a clean central prompt instead of a
+permanently visible engineering dashboard.
+
+The redesign adds:
+
+- centred "Ask anything" home experience
+- hidden slide-out conversation drawer
+- conversation search
+- Knowledge / AWS / DevOps / Research shortcuts
+- light and dark themes
+- compact local-readiness indicator
+- responsive mobile layout
+- technical route/latency information hidden under per-response Details
+- existing sessions, uploads, RAG, write approval, authentication, and
+  streaming preserved underneath the new interface
+
+### Automatic Mac startup
+
+macOS LaunchAgent support is included for the production Gunicorn server.
+
+Install it with:
+
+```bash
+python scripts/install_launchd.py
+```
+
+The application LaunchAgent uses `RunAtLoad` and `KeepAlive`, so the
+agent starts automatically after the user logs in following a reboot and
+is restarted if the process exits unexpectedly.
+
+The runner waits briefly for Ollama before starting Gunicorn.
+
+### Scheduled backups
+
+The same installer creates a daily backup LaunchAgent.
+
+Defaults:
+
+```text
+03:15 every day
+14 newest backups retained
+~/PersonalAIAgentBackups
+```
+
+Custom example:
+
+```bash
+python scripts/install_launchd.py \
+  --backup-hour 2 \
+  --backup-minute 30 \
+  --keep 30
+```
+
+Check the agents:
+
+```bash
+python scripts/install_launchd.py --status
+```
+
+### Performance benchmark
+
+Run:
+
+```bash
+python scripts/performance_check.py
+```
+
+It records representative simple and complex prompts and writes both JSON
+and Markdown reports under:
+
+```text
+workspace/performance/
+```
+
+The report includes route selection, first-visible-token latency, model
+latency, total latency, tool count, and success/error status.
 
 ## What changed in 2.1
 
@@ -181,15 +262,20 @@ Open:
 http://127.0.0.1:8000
 ```
 
-The browser UI supports:
+The browser UI uses a minimal search-first layout and supports:
 
-- streamed simple responses
+- centred home prompt
+- streamed responses
+- hidden conversation drawer
+- conversation search
 - persistent sessions
-- session switching
+- quick Knowledge / AWS / DevOps / Research actions
 - local knowledge uploads
 - knowledge-index rebuild
 - per-message explicit write approval
-- performance timing display
+- light/dark theme
+- readiness status
+- expandable per-response performance details
 
 ## Production security
 
@@ -308,9 +394,34 @@ Real production secrets belong in:
 
 which is ignored by Git.
 
+## Automatic startup and scheduled backups
+
+Install the macOS LaunchAgents:
+
+```bash
+python scripts/install_launchd.py
+```
+
+The application starts automatically after login/reboot. The backup job
+runs daily at 03:15 by default and stores archives outside the repo under
+`~/PersonalAIAgentBackups`.
+
+To start the installed service immediately after stopping a manually
+running Gunicorn instance:
+
+```bash
+launchctl kickstart -k gui/$(id -u)/com.nabil.personal-ai-agent
+```
+
+To remove both LaunchAgents:
+
+```bash
+python scripts/install_launchd.py --uninstall
+```
+
 ## Backups
 
-Create:
+Create an on-demand backup:
 
 ```bash
 python scripts/backup.py
@@ -324,6 +435,25 @@ python scripts/restore.py backups/<archive>.tar.gz --confirm
 
 Backups preserve personal knowledge and conversation sessions. The vector
 index is derived data and is rebuilt after restore.
+
+## Performance check
+
+Run the final local benchmark after the model has been installed and the
+local integrations are authenticated:
+
+```bash
+python scripts/performance_check.py
+```
+
+Representative cases include:
+
+- simple name query
+- simple capabilities query
+- latest failed GitHub Actions investigation
+- local knowledge/RAG investigation
+
+Reports are stored under `workspace/performance/` and therefore remain
+local and untracked.
 
 ## Tests
 
@@ -380,6 +510,11 @@ personal-ai-agent/
 ├── prompts/
 ├── tools/
 ├── scripts/
+│   ├── run_production.sh
+│   ├── install_launchd.py
+│   ├── performance_check.py
+│   ├── backup.py
+│   └── restore.py
 ├── tests/
 ├── knowledge/
 └── workspace/     # local, ignored by Git

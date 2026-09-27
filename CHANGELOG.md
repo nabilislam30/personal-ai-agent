@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.2.0
+
+Interface and Mac operations release.
+
+### Interface
+
+- Replaced the persistent dashboard layout with a minimal search-first UI
+- Added a centred home prompt inspired by modern search products
+- Added a hidden slide-out conversation drawer
+- Added conversation filtering
+- Added Knowledge, AWS, DevOps, and Research quick actions
+- Added responsive light/dark themes
+- Added a compact readiness indicator
+- Moved route and performance telemetry into expandable response details
+- Preserved streaming, sessions, RAG uploads, authentication, CSRF, and
+  write-approval behaviour
+
+### macOS operations
+
+- Added a production runner for LaunchAgent use
+- Added automatic startup after user login/reboot
+- Added KeepAlive restart behaviour
+- Added daily scheduled backup LaunchAgent generation
+- Defaulted scheduled backups to 03:15 with 14-backup retention
+- Defaulted scheduled backup storage to ~/PersonalAIAgentBackups
+- Added LaunchAgent install/status/uninstall commands
+
+### Performance validation
+
+- Added a repeatable simple/complex prompt benchmark
+- Added first-visible-token and total latency recording
+- Added JSON and Markdown benchmark reports
+- Corrected tool-route first-token timing to represent first visible output
+- Added automated tests for UI markers, LaunchAgent configuration, and
+  performance aggregation
+
 ## 2.1.0
 
 Performance and private-production-readiness release.

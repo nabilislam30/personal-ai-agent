@@ -9,27 +9,48 @@
   <title>Personal AI Agent</title>
   <style>
     :root {
-      color-scheme: dark;
-      --bg: #0b0d10;
-      --panel: #11151a;
-      --panel-2: #171c22;
-      --border: #28303a;
-      --text: #e8edf2;
-      --muted: #98a4b3;
-      --accent: #7aa2f7;
-      --good: #8bd49c;
-      --warn: #e6c384;
-      --danger: #f7768e;
-      --radius: 14px;
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --surface: #ffffff;
+      --surface-soft: #f8fafd;
+      --surface-hover: #f1f3f4;
+      --border: #dadce0;
+      --text: #202124;
+      --muted: #5f6368;
+      --accent: #1a73e8;
+      --accent-soft: #e8f0fe;
+      --good: #188038;
+      --danger: #d93025;
+      --shadow: 0 1px 2px rgba(60, 64, 67, .12),
+        0 2px 6px rgba(60, 64, 67, .08);
+      --drawer-width: 320px;
+      --radius: 24px;
+    }
+
+    body[data-theme="dark"] {
+      --bg: #0f1115;
+      --surface: #15181d;
+      --surface-soft: #1b1f24;
+      --surface-hover: #232830;
+      --border: #343a43;
+      --text: #edf1f7;
+      --muted: #a8b0bb;
+      --accent: #8ab4f8;
+      --accent-soft: #1b3151;
+      --good: #81c995;
+      --danger: #f28b82;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .26),
+        0 4px 14px rgba(0, 0, 0, .18);
     }
 
     * {
       box-sizing: border-box;
     }
 
+    html,
     body {
       margin: 0;
-      min-height: 100vh;
+      min-height: 100%;
       background: var(--bg);
       color: var(--text);
       font-family:
@@ -42,6 +63,11 @@
         sans-serif;
     }
 
+    body {
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
     button,
     input,
     textarea {
@@ -52,257 +78,503 @@
       cursor: pointer;
     }
 
-    .app {
-      display: grid;
-      grid-template-columns: 290px 1fr;
-      min-height: 100vh;
+    .icon-button {
+      width: 40px;
+      height: 40px;
+      display: inline-grid;
+      place-items: center;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text);
     }
 
-    aside {
-      border-right: 1px solid var(--border);
-      background: var(--panel);
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      overflow: auto;
+    .icon-button:hover {
+      background: var(--surface-hover);
     }
 
-    .brand h1 {
-      font-size: 18px;
-      margin: 0 0 6px;
-    }
-
-    .brand p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .section-title {
+    .topbar {
+      height: 64px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 10px;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
+      padding: 0 18px;
+      position: relative;
+      z-index: 20;
+      background: color-mix(
+        in srgb,
+        var(--bg) 92%,
+        transparent
+      );
+      backdrop-filter: blur(12px);
+    }
+
+    .topbar-left,
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-small {
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: -.01em;
+    }
+
+    .health-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
       color: var(--muted);
+      font-size: 12px;
+      background: var(--surface);
+    }
+
+    .health-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .health-pill.ready .health-dot {
+      background: var(--good);
+    }
+
+    .shell {
+      height: calc(100vh - 64px);
+      position: relative;
+    }
+
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 39;
+      background: rgba(32, 33, 36, .28);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease;
+    }
+
+    .drawer-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: min(var(--drawer-width), 88vw);
+      z-index: 40;
+      transform: translateX(-105%);
+      transition: transform .2s ease;
+      background: var(--surface-soft);
+      border-right: 1px solid var(--border);
+      padding: 14px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 14px;
+      overflow: hidden;
+    }
+
+    .drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .drawer-title {
+      font-size: 16px;
+      font-weight: 650;
+    }
+
+    .new-chat {
+      width: 100%;
+      border: 0;
+      border-radius: 18px;
+      padding: 12px 14px;
+      text-align: left;
+      background: var(--accent-soft);
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .drawer-scroll {
+      overflow-y: auto;
+      min-height: 0;
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    .drawer-section-title {
+      margin: 2px 4px 8px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .session-search {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      outline: none;
     }
 
     .sessions {
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
+      display: grid;
+      gap: 4px;
     }
 
     .session {
       width: 100%;
-      text-align: left;
-      border: 1px solid transparent;
+      border: 0;
       background: transparent;
       color: var(--text);
-      padding: 10px;
       border-radius: 10px;
+      text-align: left;
+      padding: 10px;
     }
 
     .session:hover,
     .session.active {
-      background: var(--panel-2);
-      border-color: var(--border);
+      background: var(--surface-hover);
     }
 
     .session-title {
+      font-size: 13px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: 13px;
     }
 
-    .session-id {
-      color: var(--muted);
+    .session-meta {
+      margin-top: 3px;
       font-size: 11px;
-      margin-top: 4px;
+      color: var(--muted);
     }
 
-    .secondary-button,
-    .primary-button {
-      border-radius: 9px;
-      padding: 9px 12px;
+    .knowledge-card {
       border: 1px solid var(--border);
-    }
-
-    .secondary-button {
-      background: var(--panel-2);
-      color: var(--text);
-    }
-
-    .primary-button {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #08111f;
-      font-weight: 650;
-    }
-
-    .knowledge-box {
-      border: 1px solid var(--border);
-      background: var(--panel-2);
-      border-radius: var(--radius);
+      border-radius: 16px;
+      background: var(--surface);
       padding: 12px;
     }
 
     .knowledge-status {
       color: var(--muted);
       font-size: 11px;
+      line-height: 1.5;
       white-space: pre-wrap;
-      line-height: 1.45;
-      max-height: 180px;
+      max-height: 130px;
       overflow: auto;
     }
 
-    .upload-row {
-      margin-top: 12px;
+    .knowledge-actions {
+      margin-top: 10px;
       display: grid;
       gap: 8px;
     }
 
-    .upload-row input {
-      max-width: 100%;
-      color: var(--muted);
-      font-size: 12px;
+    .soft-button {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 9px 11px;
     }
 
-    .account {
-      margin-top: auto;
+    .soft-button:hover {
+      background: var(--surface-hover);
     }
 
-    .account form {
+    .drawer-footer {
+      display: grid;
+      gap: 8px;
+    }
+
+    .drawer-footer form {
       margin: 0;
     }
 
-    .account button {
+    .drawer-footer button {
       width: 100%;
     }
 
-    main {
-      min-width: 0;
+    .main {
+      height: 100%;
       display: grid;
-      grid-template-rows: auto 1fr auto;
-      max-height: 100vh;
+      grid-template-rows: 1fr;
     }
 
-    header {
-      border-bottom: 1px solid var(--border);
-      padding: 16px 22px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(11, 13, 16, 0.92);
+    .home {
+      height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      overflow-y: auto;
     }
 
-    .header-title {
-      font-size: 14px;
+    .home-inner {
+      width: min(760px, 100%);
+      transform: translateY(-5vh);
+      text-align: center;
+    }
+
+    .home-mark {
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 18px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(
+          135deg,
+          #4285f4,
+          #34a853 34%,
+          #fbbc05 66%,
+          #ea4335
+        );
+      color: #fff;
+      font-size: 27px;
+      font-weight: 800;
+      box-shadow: var(--shadow);
+    }
+
+    .home h1 {
+      margin: 0;
+      font-size: clamp(30px, 5vw, 46px);
+      letter-spacing: -.035em;
       font-weight: 650;
     }
 
-    .model-pill {
-      border: 1px solid var(--border);
+    .home-subtitle {
+      margin: 10px auto 30px;
       color: var(--muted);
-      padding: 5px 9px;
-      border-radius: 999px;
-      font-size: 11px;
+      font-size: 15px;
     }
 
-    #messages {
-      overflow-y: auto;
-      padding: 28px max(24px, calc((100% - 880px) / 2));
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-    }
-
-    .message {
-      max-width: 82%;
-      border-radius: var(--radius);
-      padding: 14px 16px;
-      white-space: pre-wrap;
-      line-height: 1.55;
-      font-size: 14px;
-      overflow-wrap: anywhere;
-    }
-
-    .message.user {
-      align-self: flex-end;
-      background: #1d2b43;
-      border: 1px solid #2d4366;
-    }
-
-    .message.assistant {
-      align-self: flex-start;
-      background: var(--panel-2);
-      border: 1px solid var(--border);
-    }
-
-    .empty {
-      margin: auto;
-      color: var(--muted);
-      text-align: center;
-      max-width: 520px;
-      line-height: 1.6;
-    }
-
-    .composer-wrap {
-      border-top: 1px solid var(--border);
-      padding: 16px max(24px, calc((100% - 880px) / 2));
-      background: var(--bg);
-    }
-
-    .composer {
-      border: 1px solid var(--border);
-      background: var(--panel);
-      border-radius: var(--radius);
-      padding: 12px;
-    }
-
-    textarea {
+    .search-composer {
       width: 100%;
-      min-height: 74px;
-      max-height: 220px;
-      resize: vertical;
-      border: none;
-      outline: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      padding: 8px 8px 8px 20px;
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+    }
+
+    .search-composer:focus-within {
+      border-color: color-mix(
+        in srgb,
+        var(--accent) 58%,
+        var(--border)
+      );
+      box-shadow:
+        0 1px 2px rgba(60, 64, 67, .14),
+        0 5px 18px rgba(60, 64, 67, .12);
+    }
+
+    .search-composer textarea {
+      flex: 1;
+      min-width: 0;
+      min-height: 46px;
+      max-height: 180px;
+      resize: none;
+      border: 0;
+      outline: 0;
       background: transparent;
       color: var(--text);
       line-height: 1.5;
+      padding: 12px 0 9px;
     }
 
-    .composer-actions {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: 8px;
+    .send-button {
+      width: 42px;
+      height: 42px;
+      flex: 0 0 42px;
+      border-radius: 50%;
+      border: 0;
+      background: var(--accent);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      font-weight: 700;
     }
 
-    .approval {
+    .send-button:disabled {
+      opacity: .45;
+      cursor: wait;
+    }
+
+    .quick-actions {
       display: flex;
-      gap: 8px;
-      align-items: center;
-      color: var(--muted);
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 20px;
+    }
+
+    .quick-action {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 9px 13px;
       font-size: 12px;
     }
 
-    .approval input {
+    .quick-action:hover {
+      background: var(--surface-hover);
+    }
+
+    .home-foot {
+      margin-top: 28px;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .chat {
+      height: 100%;
+      display: none;
+      grid-template-rows: auto 1fr auto;
+      min-height: 0;
+    }
+
+    .chat.active {
+      display: grid;
+    }
+
+    .chat-head {
+      height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 0 18px;
+    }
+
+    .chat-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 70vw;
+    }
+
+    .messages {
+      min-height: 0;
+      overflow-y: auto;
+      padding: 20px max(20px, calc((100% - 860px) / 2)) 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .message-row {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .message-row.user {
+      align-items: flex-end;
+    }
+
+    .message-row.assistant {
+      align-items: flex-start;
+    }
+
+    .message-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin: 0 5px 6px;
+    }
+
+    .message {
+      max-width: min(760px, 86%);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.62;
+      font-size: 15px;
+    }
+
+    .message-row.user .message {
+      background: var(--surface-hover);
+      padding: 12px 16px;
+      border-radius: 20px 20px 6px 20px;
+    }
+
+    .message-row.assistant .message {
+      padding: 3px 5px;
+    }
+
+    .turn-details {
+      margin: 8px 5px 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .turn-details summary {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .composer-dock {
+      padding: 12px max(20px, calc((100% - 860px) / 2)) 18px;
+      background:
+        linear-gradient(
+          to top,
+          var(--bg) 76%,
+          color-mix(in srgb, var(--bg) 0%, transparent)
+        );
+    }
+
+    .composer-options {
+      margin-top: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .write-approval {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .write-approval input {
       accent-color: var(--accent);
     }
 
     .notice {
-      margin-top: 8px;
-      min-height: 18px;
-      color: var(--muted);
-      font-size: 12px;
-      white-space: pre-wrap;
+      min-height: 16px;
+      text-align: right;
     }
 
     .notice.error {
@@ -313,44 +585,125 @@
       color: var(--good);
     }
 
-    @media (max-width: 800px) {
-      .app {
-        grid-template-columns: 1fr;
+    .hidden-file {
+      display: none;
+    }
+
+    @media (max-width: 720px) {
+      .brand-small {
+        display: none;
       }
 
-      aside {
+      .health-pill span:last-child {
         display: none;
+      }
+
+      .home-inner {
+        transform: translateY(-2vh);
+      }
+
+      .home-subtitle {
+        margin-bottom: 22px;
       }
 
       .message {
         max-width: 94%;
       }
 
-      #messages,
-      .composer-wrap {
+      .messages,
+      .composer-dock {
         padding-left: 14px;
         padding-right: 14px;
+      }
+
+      .composer-options {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .notice {
+        text-align: left;
       }
     }
   </style>
 </head>
 <body>
-  <div class="app">
-    <aside>
-      <div class="brand">
-        <h1>Personal AI Agent</h1>
-        <p>Private local-first workspace</p>
+  <header class="topbar">
+    <div class="topbar-left">
+      <button
+        class="icon-button"
+        id="menuButton"
+        type="button"
+        aria-label="Open menu"
+      >☰</button>
+      <div class="brand-small">
+        Personal AI Agent
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <div
+        class="health-pill"
+        id="healthPill"
+        title="Application readiness"
+      >
+        <span class="health-dot"></span>
+        <span id="healthText">Checking</span>
       </div>
 
+      <button
+        class="icon-button"
+        id="themeButton"
+        type="button"
+        aria-label="Toggle theme"
+        title="Toggle theme"
+      >◐</button>
+    </div>
+  </header>
+
+  <div
+    class="drawer-backdrop"
+    id="drawerBackdrop"
+  ></div>
+
+  <aside
+    class="drawer"
+    id="drawer"
+    aria-label="Navigation"
+  >
+    <div class="drawer-head">
+      <div class="drawer-title">
+        Personal AI Agent
+      </div>
+      <button
+        class="icon-button"
+        id="closeDrawerButton"
+        type="button"
+        aria-label="Close menu"
+      >✕</button>
+    </div>
+
+    <button
+      class="new-chat"
+      id="newSessionButton"
+      type="button"
+    >
+      ＋ New conversation
+    </button>
+
+    <div class="drawer-scroll">
       <section>
-        <div class="section-title">
-          <span>Sessions</span>
-          <button
-            class="secondary-button"
-            id="newSessionButton"
-            type="button"
-          >New</button>
+        <div class="drawer-section-title">
+          Conversations
         </div>
+
+        <input
+          class="session-search"
+          id="sessionSearch"
+          type="search"
+          placeholder="Search conversations"
+        >
+
         <div
           class="sessions"
           id="sessions"
@@ -358,31 +711,39 @@
       </section>
 
       <section>
-        <div class="section-title">
-          <span>Knowledge</span>
+        <div class="drawer-section-title">
+          Knowledge
         </div>
-        <div class="knowledge-box">
+
+        <div class="knowledge-card">
           <div
             class="knowledge-status"
             id="knowledgeStatus"
           >Loading…</div>
 
-          <div class="upload-row">
+          <div class="knowledge-actions">
             <input
+              class="hidden-file"
               id="knowledgeFile"
               type="file"
               accept=".md,.txt,.pdf,.docx"
             >
+
             <button
-              class="secondary-button"
-              id="uploadButton"
+              class="soft-button"
+              id="chooseFileButton"
               type="button"
-            >Upload document</button>
+            >
+              Upload document
+            </button>
+
             <button
-              class="secondary-button"
+              class="soft-button"
               id="reindexButton"
               type="button"
-            >Rebuild index</button>
+            >
+              Rebuild knowledge index
+            </button>
           </div>
 
           <div
@@ -391,79 +752,152 @@
           ></div>
         </div>
       </section>
+    </div>
 
+    <div class="drawer-footer">
       {% if auth_enabled %}
-      <section class="account">
-        <form
-          action="/logout"
-          method="post"
+      <form
+        action="/logout"
+        method="post"
+      >
+        <input
+          type="hidden"
+          name="csrf_token"
+          value="{{ csrf_token }}"
         >
-          <input
-            type="hidden"
-            name="csrf_token"
-            value="{{ csrf_token }}"
-          >
-          <button
-            class="secondary-button"
-            type="submit"
-          >Sign out</button>
-        </form>
-      </section>
+        <button
+          class="soft-button"
+          type="submit"
+        >
+          Sign out
+        </button>
+      </form>
       {% endif %}
-    </aside>
+    </div>
+  </aside>
 
-    <main>
-      <header>
-        <div
-          class="header-title"
-          id="activeTitle"
-        >
-          New session
+  <main class="shell">
+    <section
+      class="home"
+      id="homeView"
+    >
+      <div class="home-inner">
+        <div class="home-mark">
+          A
         </div>
-        <div class="model-pill">
-          {{ model }}
-        </div>
-      </header>
 
-      <div id="messages">
-        <div class="empty">
-          Ask a simple question for the fast path,
-          or ask about your knowledge, GitHub Actions,
-          Terraform, AWS, files, documentation, or research.
-        </div>
-      </div>
+        <h1>
+          What can I help with?
+        </h1>
 
-      <div class="composer-wrap">
-        <div class="composer">
+        <div class="home-subtitle">
+          Your private AI workspace, running on your own machine.
+        </div>
+
+        <div class="search-composer">
           <textarea
-            id="prompt"
-            placeholder="Message your agent…"
+            id="homePrompt"
+            rows="1"
+            placeholder="Ask anything"
+            aria-label="Ask anything"
           ></textarea>
 
-          <div class="composer-actions">
-            <label class="approval">
-              <input
-                type="checkbox"
-                id="approveWrites"
-              >
-              Approve write tools for this message
-            </label>
-
-            <button
-              class="primary-button"
-              id="sendButton"
-              type="button"
-            >Send</button>
-          </div>
+          <button
+            class="send-button"
+            id="homeSendButton"
+            type="button"
+            aria-label="Send"
+          >↑</button>
         </div>
 
-        <div
-          class="notice"
-          id="chatNotice"
-        ></div>
+        <div class="quick-actions">
+          <button
+            class="quick-action"
+            type="button"
+            data-prompt="Search my knowledge for "
+          >Knowledge</button>
+
+          <button
+            class="quick-action"
+            type="button"
+            data-prompt="Show me my AWS environment in eu-west-2 and summarise what is running."
+          >AWS</button>
+
+          <button
+            class="quick-action"
+            type="button"
+            data-prompt="Investigate the most recent failed GitHub Actions run."
+          >DevOps</button>
+
+          <button
+            class="quick-action"
+            type="button"
+            data-prompt="Research "
+          >Research</button>
+        </div>
+
+        <div class="home-foot">
+          <span>Private</span>
+          <span>•</span>
+          <span>Local-first</span>
+          <span>•</span>
+          <span>{{ model }}</span>
+          <span>•</span>
+          <span>Ollama</span>
+        </div>
       </div>
-    </main>
-  </div>
+    </section>
+
+    <section
+      class="chat"
+      id="chatView"
+    >
+      <div class="chat-head">
+        <div
+          class="chat-title"
+          id="activeTitle"
+        >New conversation</div>
+      </div>
+
+      <div
+        class="messages"
+        id="messages"
+      ></div>
+
+      <div class="composer-dock">
+        <div class="search-composer">
+          <textarea
+            id="prompt"
+            rows="1"
+            placeholder="Ask a follow-up"
+            aria-label="Ask a follow-up"
+          ></textarea>
+
+          <button
+            class="send-button"
+            id="sendButton"
+            type="button"
+            aria-label="Send"
+          >↑</button>
+        </div>
+
+        <div class="composer-options">
+          <label class="write-approval">
+            <input
+              type="checkbox"
+              id="approveWrites"
+            >
+            Approve write tools for this message
+          </label>
+
+          <div
+            class="notice"
+            id="chatNotice"
+          ></div>
+        </div>
+      </div>
+    </section>
+  </main>
 
   <script>
     const csrfToken =
@@ -475,14 +909,28 @@
       sending: false,
     };
 
+    const drawer =
+      document.getElementById("drawer");
+    const drawerBackdrop =
+      document.getElementById("drawerBackdrop");
     const sessionsEl =
       document.getElementById("sessions");
+    const sessionSearch =
+      document.getElementById("sessionSearch");
+    const homeView =
+      document.getElementById("homeView");
+    const chatView =
+      document.getElementById("chatView");
     const messagesEl =
       document.getElementById("messages");
     const activeTitle =
       document.getElementById("activeTitle");
+    const homePrompt =
+      document.getElementById("homePrompt");
     const promptEl =
       document.getElementById("prompt");
+    const homeSendButton =
+      document.getElementById("homeSendButton");
     const sendButton =
       document.getElementById("sendButton");
     const approveWrites =
@@ -495,6 +943,20 @@
       document.getElementById("knowledgeNotice");
     const knowledgeFile =
       document.getElementById("knowledgeFile");
+    const healthPill =
+      document.getElementById("healthPill");
+    const healthText =
+      document.getElementById("healthText");
+
+    function openDrawer() {
+      drawer.classList.add("open");
+      drawerBackdrop.classList.add("open");
+    }
+
+    function closeDrawer() {
+      drawer.classList.remove("open");
+      drawerBackdrop.classList.remove("open");
+    }
 
     function setNotice(
       element,
@@ -507,10 +969,81 @@
         (type ? " " + type : "");
     }
 
+    function setTheme(theme) {
+      document.body.dataset.theme = theme;
+      localStorage.setItem("pai-theme", theme);
+    }
+
+    function initialiseTheme() {
+      const stored =
+        localStorage.getItem("pai-theme");
+
+      if (stored) {
+        setTheme(stored);
+        return;
+      }
+
+      const prefersDark =
+        window.matchMedia(
+          "(prefers-color-scheme: dark)"
+        ).matches;
+
+      setTheme(
+        prefersDark ? "dark" : "light"
+      );
+    }
+
+    function toggleTheme() {
+      const current =
+        document.body.dataset.theme;
+
+      setTheme(
+        current === "dark"
+          ? "light"
+          : "dark"
+      );
+    }
+
+    function showHome() {
+      homeView.style.display = "grid";
+      chatView.classList.remove("active");
+      homePrompt.focus();
+    }
+
+    function showChat() {
+      homeView.style.display = "none";
+      chatView.classList.add("active");
+      promptEl.focus();
+    }
+
+    function sessionMatches(
+      session,
+      query
+    ) {
+      if (!query) {
+        return true;
+      }
+
+      return (
+        session.title
+        .toLowerCase()
+        .includes(
+          query.toLowerCase()
+        )
+      );
+    }
+
     function renderSessions() {
+      const query =
+        sessionSearch.value.trim();
+
       sessionsEl.innerHTML = "";
 
       for (const session of state.sessions) {
+        if (!sessionMatches(session, query)) {
+          continue;
+        }
+
         const button =
           document.createElement("button");
 
@@ -531,16 +1064,16 @@
         title.textContent =
           session.title;
 
-        const id =
+        const meta =
           document.createElement("div");
-        id.className =
-          "session-id";
-        id.textContent =
+        meta.className =
+          "session-meta";
+        meta.textContent =
           session.short_id;
 
         button.append(
           title,
-          id
+          meta
         );
 
         button.addEventListener(
@@ -561,25 +1094,17 @@
     ) {
       messagesEl.innerHTML = "";
 
-      if (!messages.length) {
-        const empty =
-          document.createElement("div");
-
-        empty.className = "empty";
-        empty.textContent =
-          "Start a conversation with your local agent.";
-
-        messagesEl.appendChild(
-          empty
-        );
-        return;
-      }
-
       for (const message of messages) {
         appendMessage(
           message.role,
           message.content
         );
+      }
+
+      if (messages.length) {
+        showChat();
+      } else {
+        showHome();
       }
 
       messagesEl.scrollTop =
@@ -590,33 +1115,117 @@
       role,
       content
     ) {
-      const existingEmpty =
-        messagesEl.querySelector(
-          ".empty"
-        );
+      const row =
+        document.createElement("div");
 
-      if (existingEmpty) {
-        existingEmpty.remove();
-      }
+      row.className =
+        "message-row " + role;
+
+      const label =
+        document.createElement("div");
+
+      label.className =
+        "message-label";
+
+      label.textContent =
+        role === "user"
+          ? "You"
+          : "Agent";
 
       const bubble =
-        document.createElement(
-          "div"
-        );
+        document.createElement("div");
 
-      bubble.className =
-        "message " + role;
-      bubble.textContent =
-        content;
+      bubble.className = "message";
+      bubble.textContent = content;
+
+      row.append(
+        label,
+        bubble
+      );
 
       messagesEl.appendChild(
-        bubble
+        row
       );
 
       messagesEl.scrollTop =
         messagesEl.scrollHeight;
 
-      return bubble;
+      return {
+        row,
+        bubble,
+      };
+    }
+
+    function addTurnDetails(
+      row,
+      event,
+      routeName
+    ) {
+      const details =
+        document.createElement("details");
+
+      details.className =
+        "turn-details";
+
+      const summary =
+        document.createElement("summary");
+
+      summary.textContent =
+        "Details";
+
+      const body =
+        document.createElement("div");
+
+      const pieces = [
+        "Route: " + routeName,
+      ];
+
+      if (
+        event.first_token_ms
+        !== null
+        && event.first_token_ms
+        !== undefined
+      ) {
+        pieces.push(
+          "First token: " +
+          Math.round(
+            event.first_token_ms
+          ) +
+          " ms"
+        );
+      }
+
+      if (
+        event.total_ms
+        !== null
+        && event.total_ms
+        !== undefined
+      ) {
+        pieces.push(
+          "Total: " +
+          (
+            event.total_ms / 1000
+          ).toFixed(2) +
+          " s"
+        );
+      }
+
+      pieces.push(
+        "Tools: " +
+        (event.tool_calls || 0)
+      );
+
+      body.textContent =
+        pieces.join(" · ");
+
+      details.append(
+        summary,
+        body
+      );
+
+      row.appendChild(
+        details
+      );
     }
 
     async function parseJson(
@@ -662,6 +1271,32 @@
       renderMessages(
         data.messages
       );
+
+      checkHealth();
+    }
+
+    async function checkHealth() {
+      try {
+        const response =
+          await fetch("/ready");
+
+        if (response.ok) {
+          healthPill.classList.add(
+            "ready"
+          );
+          healthText.textContent =
+            "Local";
+          return;
+        }
+      } catch (_error) {
+        // Fall through to unavailable state.
+      }
+
+      healthPill.classList.remove(
+        "ready"
+      );
+      healthText.textContent =
+        "Unavailable";
     }
 
     async function refreshSessions() {
@@ -711,6 +1346,7 @@
         chatNotice,
         ""
       );
+      closeDrawer();
     }
 
     async function createSession() {
@@ -743,63 +1379,27 @@
 
       renderSessions();
       renderMessages([]);
-      promptEl.focus();
+      closeDrawer();
     }
 
-    function performanceText(
-      event,
-      routeName
+    function autoResize(
+      textarea
     ) {
-      const pieces = [
-        "Route: " + routeName,
-      ];
+      textarea.style.height =
+        "auto";
 
-      if (
-        event.first_token_ms
-        !== null
-        && event.first_token_ms
-        !== undefined
-      ) {
-        pieces.push(
-          "first token: " +
-          Math.round(
-            event.first_token_ms
-          ) +
-          " ms"
-        );
-      }
-
-      if (
-        event.total_ms
-        !== null
-        && event.total_ms
-        !== undefined
-      ) {
-        pieces.push(
-          "total: " +
-          (
-            event.total_ms
-            / 1000
-          ).toFixed(2) +
-          " s"
-        );
-      }
-
-      if (event.tool_calls) {
-        pieces.push(
-          "tools: " +
-          event.tool_calls
-        );
-      }
-
-      return pieces.join(
-        " · "
-      );
+      textarea.style.height =
+        Math.min(
+          textarea.scrollHeight,
+          180
+        ) + "px";
     }
 
-    async function sendMessage() {
+    async function sendMessage(
+      rawPrompt
+    ) {
       const prompt =
-        promptEl.value.trim();
+        rawPrompt.trim();
 
       if (
         !prompt
@@ -810,27 +1410,32 @@
 
       state.sending = true;
       sendButton.disabled = true;
+      homeSendButton.disabled = true;
 
-      setNotice(
-        chatNotice,
-        "Routing request…"
-      );
+      showChat();
 
       appendMessage(
         "user",
         prompt
       );
 
-      const assistantBubble =
+      const assistant =
         appendMessage(
           "assistant",
           ""
         );
 
       promptEl.value = "";
+      homePrompt.value = "";
+      autoResize(promptEl);
+      autoResize(homePrompt);
 
-      let routeName =
-        "unknown";
+      setNotice(
+        chatNotice,
+        "Thinking…"
+      );
+
+      let routeName = "unknown";
 
       try {
         const response =
@@ -906,25 +1511,21 @@
               JSON.parse(line);
 
             if (
-              event.type ===
-              "meta"
+              event.type === "meta"
             ) {
               routeName =
                 event.route;
 
               setNotice(
                 chatNotice,
-                "Route: " +
-                routeName +
-                " · generating…"
+                "Generating…"
               );
             }
 
             if (
-              event.type ===
-              "token"
+              event.type === "token"
             ) {
-              assistantBubble
+              assistant.bubble
                 .textContent +=
                 event.content;
 
@@ -933,22 +1534,23 @@
             }
 
             if (
-              event.type ===
-              "done"
+              event.type === "done"
             ) {
               setNotice(
                 chatNotice,
-                performanceText(
-                  event,
-                  routeName
-                ),
+                "Ready",
                 "good"
+              );
+
+              addTurnDetails(
+                assistant.row,
+                event,
+                routeName
               );
             }
 
             if (
-              event.type ===
-              "error"
+              event.type === "error"
             ) {
               throw new Error(
                 event.error ||
@@ -977,10 +1579,10 @@
 
       } catch (error) {
         if (
-          !assistantBubble
+          !assistant.bubble
           .textContent
         ) {
-          assistantBubble.remove();
+          assistant.row.remove();
         }
 
         setNotice(
@@ -990,8 +1592,8 @@
         );
       } finally {
         state.sending = false;
-        sendButton.disabled =
-          false;
+        sendButton.disabled = false;
+        homeSendButton.disabled = false;
         promptEl.focus();
       }
     }
@@ -1001,11 +1603,6 @@
         knowledgeFile.files[0];
 
       if (!file) {
-        setNotice(
-          knowledgeNotice,
-          "Choose a file first.",
-          "error"
-        );
         return;
       }
 
@@ -1044,12 +1641,11 @@
         knowledgeStatus.textContent =
           data.status;
 
-        knowledgeFile.value =
-          "";
+        knowledgeFile.value = "";
 
         setNotice(
           knowledgeNotice,
-          data.message,
+          "Uploaded",
           "good"
         );
 
@@ -1074,7 +1670,7 @@
 
       setNotice(
         knowledgeNotice,
-        "Rebuilding index…"
+        "Rebuilding…"
       );
 
       try {
@@ -1107,7 +1703,7 @@
 
         setNotice(
           knowledgeNotice,
-          data.result,
+          "Index updated",
           "good"
         );
 
@@ -1122,32 +1718,75 @@
 
     document
       .getElementById(
+        "menuButton"
+      )
+      .addEventListener(
+        "click",
+        openDrawer
+      );
+
+    document
+      .getElementById(
+        "closeDrawerButton"
+      )
+      .addEventListener(
+        "click",
+        closeDrawer
+      );
+
+    drawerBackdrop.addEventListener(
+      "click",
+      closeDrawer
+    );
+
+    document
+      .getElementById(
+        "themeButton"
+      )
+      .addEventListener(
+        "click",
+        toggleTheme
+      );
+
+    document
+      .getElementById(
         "newSessionButton"
       )
       .addEventListener(
         "click",
         () => {
-          createSession()
-            .catch(
-              (error) => {
-                setNotice(
-                  chatNotice,
-                  error.message,
-                  "error"
-                );
-              }
-            );
+          createSession().catch(
+            (error) => {
+              setNotice(
+                chatNotice,
+                error.message,
+                "error"
+              );
+            }
+          );
         }
       );
 
+    sessionSearch.addEventListener(
+      "input",
+      renderSessions
+    );
+
     document
       .getElementById(
-        "uploadButton"
+        "chooseFileButton"
       )
       .addEventListener(
         "click",
-        uploadKnowledge
+        () => {
+          knowledgeFile.click();
+        }
       );
+
+    knowledgeFile.addEventListener(
+      "change",
+      uploadKnowledge
+    );
 
     document
       .getElementById(
@@ -1160,22 +1799,80 @@
 
     sendButton.addEventListener(
       "click",
-      sendMessage
+      () => sendMessage(
+        promptEl.value
+      )
     );
 
-    promptEl.addEventListener(
-      "keydown",
-      (event) => {
-        if (
-          event.key ===
-          "Enter"
-          && !event.shiftKey
-        ) {
-          event.preventDefault();
-          sendMessage();
-        }
-      }
+    homeSendButton.addEventListener(
+      "click",
+      () => sendMessage(
+        homePrompt.value
+      )
     );
+
+    for (
+      const button
+      of document.querySelectorAll(
+        ".quick-action"
+      )
+    ) {
+      button.addEventListener(
+        "click",
+        () => {
+          const prompt =
+            button.dataset.prompt || "";
+
+          homePrompt.value =
+            prompt;
+
+          autoResize(
+            homePrompt
+          );
+
+          homePrompt.focus();
+
+          if (
+            !prompt.endsWith(" ")
+          ) {
+            sendMessage(prompt);
+          }
+        }
+      );
+    }
+
+    for (
+      const textarea
+      of [
+        homePrompt,
+        promptEl,
+      ]
+    ) {
+      textarea.addEventListener(
+        "input",
+        () => autoResize(
+          textarea
+        )
+      );
+
+      textarea.addEventListener(
+        "keydown",
+        (event) => {
+          if (
+            event.key === "Enter"
+            && !event.shiftKey
+          ) {
+            event.preventDefault();
+
+            sendMessage(
+              textarea.value
+            );
+          }
+        }
+      );
+    }
+
+    initialiseTheme();
 
     bootstrap().catch(
       (error) => {
