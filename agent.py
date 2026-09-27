@@ -711,6 +711,11 @@ def stream_agent_turn(
             )
         )
 
+        first_visible_ms = (
+            perf_counter()
+            - started
+        ) * 1000
+
         yield {
             "type": "token",
             "content": result.content,
@@ -721,7 +726,12 @@ def stream_agent_turn(
             "tool_calls": (
                 result.tool_calls
             ),
-            "first_token_ms": None,
+            "first_token_ms": (
+                round(
+                    first_visible_ms,
+                    1,
+                )
+            ),
             "model_ms": (
                 round(
                     result.model_ms,
@@ -764,7 +774,7 @@ def stream_agent_turn(
             if first_token_ms is None:
                 first_token_ms = (
                     perf_counter()
-                    - model_started
+                    - started
                 ) * 1000
 
             content_parts.append(

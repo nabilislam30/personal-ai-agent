@@ -7,6 +7,7 @@ on:
       - v1-finalization
       - v2-core
       - v2-performance
+      - v2-ui-operations
 
   pull_request:
     branches:

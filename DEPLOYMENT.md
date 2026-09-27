@@ -194,7 +194,90 @@ expose the Ollama API directly to the internet.
 For the Mac mini, prefer direct Gunicorn if Docker would require widening
 Ollama's listening interface.
 
-## 7. Backups
+## 7. Automatic Startup After Reboot
+
+The repo includes a macOS LaunchAgent installer for the production
+Gunicorn service and the scheduled backup job.
+
+First stop any manually running Gunicorn process on port 8000.
+
+Then run:
+
+```bash
+source .venv/bin/activate
+python scripts/install_launchd.py
+```
+
+This creates:
+
+```text
+~/Library/LaunchAgents/com.nabil.personal-ai-agent.plist
+~/Library/LaunchAgents/com.nabil.personal-ai-agent.backup.plist
+```
+
+The application LaunchAgent:
+
+- runs after user login
+- restarts the service if it exits
+- loads `.env.production`
+- waits briefly for Ollama
+- starts Gunicorn on `127.0.0.1:8000`
+- writes stdout/stderr logs under `workspace/logs/`
+
+Check status:
+
+```bash
+python scripts/install_launchd.py --status
+```
+
+Start the service immediately after installation when required:
+
+```bash
+launchctl kickstart -k gui/$(id -u)/com.nabil.personal-ai-agent
+```
+
+Remove the LaunchAgents:
+
+```bash
+python scripts/install_launchd.py --uninstall
+```
+
+This is a user LaunchAgent, so it starts after the macOS user session is
+available rather than before login.
+
+## 8. Scheduled Backups
+
+The backup LaunchAgent is installed at the same time.
+
+Default schedule:
+
+```text
+03:15 daily
+```
+
+Default backup directory:
+
+```text
+~/PersonalAIAgentBackups
+```
+
+Default retention:
+
+```text
+14 newest archives
+```
+
+Custom example:
+
+```bash
+python scripts/install_launchd.py \
+  --backup-hour 2 \
+  --backup-minute 45 \
+  --keep 30 \
+  --backup-root ~/PersonalAIAgentBackups
+```
+
+## 9. On-Demand Backups
 
 Create a backup:
 
@@ -221,7 +304,7 @@ python scripts/restore.py backups/<archive>.tar.gz --confirm
 Restore automatically creates a pre-restore safety backup and removes
 the old derived knowledge index. Rebuild the RAG index afterward.
 
-## 8. Updating
+## 10. Updating
 
 ```bash
 git pull origin main
@@ -237,7 +320,7 @@ curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8000/ready
 ```
 
-## 9. Logs and Performance Metrics
+## 11. Logs and Performance Metrics
 
 Application logs are JSON and deliberately exclude prompt contents.
 
@@ -258,7 +341,16 @@ Structured logs include:
 - model latency
 - total latency
 
-## 10. Stop Private Remote Access
+Run the repeatable benchmark suite:
+
+```bash
+python scripts/performance_check.py
+```
+
+It records simple and complex prompt results under
+`workspace/performance/` as JSON and Markdown.
+
+## 12. Stop Private Remote Access
 
 Disable Tailscale Serve:
 
